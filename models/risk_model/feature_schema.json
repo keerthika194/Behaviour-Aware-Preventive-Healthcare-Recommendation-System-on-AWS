@@ -1,0 +1,42 @@
+{
+  "model_type": "XGBoostClassifier",
+  "target": "Diabetes_binary",
+  "feature_names": [
+    "HighBP",
+    "HighChol",
+    "CholCheck",
+    "BMI",
+    "Smoker",
+    "Stroke",
+    "HeartDiseaseorAttack",
+    "PhysActivity",
+    "Fruits",
+    "Veggies",
+    "HvyAlcoholConsump",
+    "AnyHealthcare",
+    "NoDocbcCost",
+    "GenHlth",
+    "MentHlth",
+    "PhysHlth",
+    "DiffWalk",
+    "Sex",
+    "Age",
+    "Education",
+    "Income"
+  ],
+  "feature_count": 21,
+  "best_hyperparameters": {
+    "colsample_bytree": 0.8,
+    "learning_rate": 0.03,
+    "max_depth": 5,
+    "n_estimators": 200,
+    "subsample": 0.8
+  },
+  "test_metrics": {
+    "accuracy": 0.7489,
+    "precision": 0.7309,
+    "recall": 0.8009,
+    "f1_score": 0.7643,
+    "auc_roc": 0.8244
+  }
+}

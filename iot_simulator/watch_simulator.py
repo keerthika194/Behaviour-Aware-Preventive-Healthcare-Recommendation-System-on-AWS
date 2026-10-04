@@ -276,7 +276,10 @@ def publish_to_aws(selected_windows, interval):
             selected_windows,
             1
         ):
-
+            # Update timestamp dynamically right before sending
+            import datetime
+            payload["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            
             msg_body = json.dumps(payload)
 
             publish_future, _ = mqtt_connection.publish(
@@ -412,6 +415,10 @@ def run_simulator(
         f"total synchronized "
         f"10-second window payloads."
     )
+
+    import random
+    random.seed()
+    random.shuffle(windows)
 
     # Select requested number
     selected_windows = windows[:max_windows]

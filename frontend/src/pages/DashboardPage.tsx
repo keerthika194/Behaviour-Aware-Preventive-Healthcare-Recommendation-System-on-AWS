@@ -26,17 +26,17 @@ export function DashboardPage() {
   // Frontend-only acknowledge state — no backend changes needed
   const [acknowledgedSet, setAcknowledgedSet] = useState<Set<number>>(new Set());
 
-  const loadRecommendations = async () => {
+  const loadRecommendations = async (silent = false) => {
     // Use the authenticated Cognito sub — never fall back to a hardcoded demo ID
     const userId = user?.userSub;
     if (!userId) {
-      setError('User session not found. Please sign in again.');
-      setLoading(false);
+      if (!silent) setError('User session not found. Please sign in again.');
+      if (!silent) setLoading(false);
       return;
     }
     try {
-      setLoading(true);
-      setError('');
+      if (!silent) setLoading(true);
+      if (!silent) setError('');
       const data = await getRecommendations(userId);
       if (Array.isArray(data) && data.length > 0) {
         setRecommendation(data[0]);
@@ -45,14 +45,16 @@ export function DashboardPage() {
       }
     } catch (err: any) {
       console.warn('Dashboard recommendation error:', err.message);
-      setError(err.message || 'Failed to fetch recommendations');
+      if (!silent) setError(err.message || 'Failed to fetch recommendations');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadRecommendations();
+    const int = setInterval(() => loadRecommendations(true), 5000);
+    return () => clearInterval(int);
   }, [user]);
 
   // ── Derived values from API response ──────────────────────────────────

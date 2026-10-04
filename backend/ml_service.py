@@ -329,15 +329,19 @@ def process_latest_dynamodb_event(user_id=None):
 
     # If still no user_id, check profiles table for real Cognito UUIDs
     if not app_user_id:
-        prof_res = profiles_table.scan(Limit=10)
+        prof_res = profiles_table.scan()
         prof_items = prof_res.get("Items", [])
+        
+        # Sort by updated_at descending to grab the user who most recently saved their profile in the UI
+        prof_items.sort(key=lambda x: str(x.get("updated_at", "")), reverse=True)
+        
         uuid_profiles = [
             p.get("user_id") for p in prof_items
             if p.get("user_id") and p.get("user_id") != "1600"
         ]
         if uuid_profiles:
             app_user_id = uuid_profiles[0]
-            print(f"[INFO] Auto-detected Cognito user_id from 'profiles' table: {app_user_id}")
+            print(f"[INFO] Auto-detected most recently active Cognito user_id from 'profiles' table: {app_user_id}")
         elif prof_items:
             app_user_id = prof_items[0].get("user_id")
             print(f"[INFO] Auto-detected user_id from 'profiles' table: {app_user_id}")
@@ -369,6 +373,9 @@ def process_latest_dynamodb_event(user_id=None):
     # Sort matching items by timestamp or pick the last item
     matching_items.sort(key=lambda x: str(x.get("timestamp", "")))
     event = matching_items[-1]
+
+    if event.get("status") == "processed":
+        return None
 
     print(f"\n[OK] Processing latest telemetry event: {event.get('event_id')}")
 
@@ -462,6 +469,26 @@ def process_latest_dynamodb_event(user_id=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Behaviour-Aware Preventive Health ML Processing Pipeline")
     parser.add_argument("--user", type=str, help="Authenticated Cognito userSub ID")
+    parser.add_argument("--daemon", action="store_true", help="Run continuously in background polling mode")
     args = parser.parse_args()
 
-    process_latest_dynamodb_event(user_id=args.user)
+    if args.daemon:
+        print("[DAEMON] Starting ML service in background polling mode...")
+        last_processed_event_id = None
+        while True:
+            try:
+                response = activity_table.scan()
+                items = response.get("Items", [])
+                matching = [i for i in items if "sensor_features" in i and len(i["sensor_features"]) == 30]
+                if matching:
+                    matching.sort(key=lambda x: str(x.get("timestamp", "")))
+                    latest = matching[-1]
+                    if latest.get("status") != "processed" and latest.get("event_id") != last_processed_event_id:
+                        process_latest_dynamodb_event(user_id=args.user)
+                        last_processed_event_id = latest.get("event_id")
+            except Exception as e:
+                pass
+            import time
+            time.sleep(5)
+    else:
+        process_latest_dynamodb_event(user_id=args.user)

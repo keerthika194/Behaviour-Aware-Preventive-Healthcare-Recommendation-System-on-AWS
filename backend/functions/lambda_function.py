@@ -15,7 +15,7 @@ profiles_table = dynamodb.Table('profiles')
 # ============================================================
 
 CORS_HEADERS = {
-    'Access-Control-Allow-Origin': 'http://localhost:3000',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Authorization,Content-Type,X-Amz-Date,X-Api-Key,X-Amz-Security-Token',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Max-Age': '86400',

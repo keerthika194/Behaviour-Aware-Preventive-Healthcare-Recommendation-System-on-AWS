@@ -298,7 +298,7 @@ def process_telemetry(payload, user_id=None):
 # PROCESS LATEST DYNAMODB TELEMETRY & PERSIST RECOMMENDATION
 # ============================================================
 
-def process_latest_dynamodb_event(user_id=None):
+def process_latest_dynamodb_event(user_id=None, max_age_minutes=30):
     """
     Reads the latest smartwatch telemetry event from DynamoDB 'activity_events',
     executes Activity + Risk ML models for the specified Cognito user_id,
@@ -361,25 +361,41 @@ def process_latest_dynamodb_event(user_id=None):
     response = activity_table.scan()
     items = response.get("Items", [])
 
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now_utc - datetime.timedelta(minutes=max_age_minutes) if max_age_minutes else None
+
     def is_valid_sensor_event(ev):
         sf = ev.get("sensor_features", {})
         if not isinstance(sf, dict) or len(sf) != 30:
             return False
-        return any(float(v) != 0.0 for v in sf.values())
+        if not any(float(v) != 0.0 for v in sf.values()):
+            return False
+        if cutoff:
+            ts_str = ev.get("timestamp")
+            if ts_str:
+                try:
+                    ts = datetime.datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+                    if ts < cutoff:
+                        return False
+                except Exception:
+                    pass
+        return True
 
     matching_items = [
         item for item in items
-        if is_valid_sensor_event(item) and item.get("status") != "processed"
+        if is_valid_sensor_event(item) and item.get("status") not in ["processed", "archived"]
     ]
 
     if not matching_items:
+        print("\n[INFO] All recent telemetry events have been processed.")
+        print(f"Waiting for new smartwatch data (Freshness window: {max_age_minutes or 'all'} minutes)...")
         return None
 
     # Sort matching items by timestamp and pick the latest unprocessed event with real sensor features
     matching_items.sort(key=lambda x: str(x.get("timestamp", "")))
     event = matching_items[-1]
 
-    print(f"\n[OK] Processing latest telemetry event: {event.get('event_id')}")
+    print(f"\n[OK] Processing telemetry event: {event.get('event_id')} [Queue remaining: {len(matching_items)}]")
 
     # Extract 30 sensor features
     sensor_features = {
@@ -471,32 +487,22 @@ def process_latest_dynamodb_event(user_id=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Behaviour-Aware Preventive Health ML Processing Pipeline")
     parser.add_argument("--user", type=str, help="Authenticated Cognito userSub ID")
-    parser.add_argument("--daemon", action="store_true", help="Run continuously in background polling mode")
+    parser.add_argument("--loop", "--daemon", action="store_true", dest="loop", help="Run continuously in background polling mode")
+    parser.add_argument("--interval", type=int, default=5, help="Polling interval in seconds (default: 5)")
+    parser.add_argument("--max-age-minutes", type=int, default=30, help="Freshness threshold for telemetry in minutes (default: 30)")
+    parser.add_argument("--all-events", action="store_true", help="Process all historical events without time cutoff")
     args = parser.parse_args()
 
-    if args.daemon:
-        print("[DAEMON] Starting ML service in background polling mode...")
-        last_processed_event_id = None
+    max_age = None if args.all_events else args.max_age_minutes
+
+    if args.loop:
+        print(f"[POLLING] Starting ML service in background loop mode (interval: {args.interval}s, freshness: {max_age or 'all'} mins)...")
         while True:
             try:
-                response = activity_table.scan()
-                items = response.get("Items", [])
-                matching = [
-                    i for i in items
-                    if "sensor_features" in i
-                    and len(i["sensor_features"]) == 30
-                    and any(float(v) != 0.0 for v in i["sensor_features"].values())
-                    and i.get("status") != "processed"
-                ]
-                if matching:
-                    matching.sort(key=lambda x: str(x.get("timestamp", "")))
-                    latest = matching[-1]
-                    if latest.get("event_id") != last_processed_event_id:
-                        process_latest_dynamodb_event(user_id=args.user)
-                        last_processed_event_id = latest.get("event_id")
+                process_latest_dynamodb_event(user_id=args.user, max_age_minutes=max_age)
             except Exception as e:
-                pass
+                print(f"[ERROR] Polling loop exception: {e}")
             import time
-            time.sleep(5)
+            time.sleep(args.interval)
     else:
-        process_latest_dynamodb_event(user_id=args.user)
+        process_latest_dynamodb_event(user_id=args.user, max_age_minutes=max_age)

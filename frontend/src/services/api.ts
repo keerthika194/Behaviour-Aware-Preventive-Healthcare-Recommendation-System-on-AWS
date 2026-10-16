@@ -88,6 +88,12 @@ export async function getRecommendations(
     });
 
     if (!response.ok) {
+      let errorBody = '';
+      try {
+        errorBody = await response.text();
+      } catch {}
+      console.warn(`[API Fetch ${response.status}] ${url}`, errorBody);
+
       if (response.status === 401 || response.status === 403) {
         throw new Error(
           'Your session has expired. Please sign in again.'
@@ -95,7 +101,7 @@ export async function getRecommendations(
       }
 
       throw new Error(
-        `API Request failed with status ${response.status}`
+        `API Request failed with status ${response.status}${errorBody ? ': ' + errorBody : ''}`
       );
     }
 

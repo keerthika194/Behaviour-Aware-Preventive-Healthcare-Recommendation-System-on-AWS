@@ -422,6 +422,8 @@ def process_latest_dynamodb_event(user_id=None, max_age_minutes=30):
     rec_id = f"rec_{int(time.time() * 1000)}"
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     event_timestamp = str(event.get("timestamp", now_iso))
+    # 24-hour TTL (Unix Epoch in seconds for automatic DynamoDB expiration)
+    ttl_epoch = int(time.time()) + (24 * 3600)
 
     rec_item = {
         "recommendation_id": rec_id,
@@ -436,7 +438,8 @@ def process_latest_dynamodb_event(user_id=None, max_age_minutes=30):
         "recommendations": rec_list,
         "timestamp": event_timestamp,
         "created_at": now_iso,
-        "health_profile": risk_profile
+        "health_profile": risk_profile,
+        "expire_at": ttl_epoch
     }
 
     # Convert all float types in rec_item (including nested health_profile) to Decimal

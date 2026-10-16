@@ -344,6 +344,8 @@ flowchart TD
 
 **Figure 1. Cloud Deployment Architecture.**
 
+![Figure 1: Cloud Deployment Architecture](architecture/figure_1_cloud_deployment_architecture.png)
+
 #### Component-by-Component Description
 
 1. **Client & Edge Device Tier:**
@@ -487,6 +489,8 @@ flowchart LR
 ```
 
 **Figure 2. Complete System Architecture / Workflow.**
+
+![Figure 2: Complete System Architecture / Workflow](architecture/figure_2_complete_system_workflow.png)
 
 #### End-to-End System Workflow: From Input to Output
 

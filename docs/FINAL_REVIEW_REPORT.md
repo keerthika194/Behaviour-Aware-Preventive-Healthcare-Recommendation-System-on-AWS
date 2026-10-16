@@ -74,8 +74,9 @@ The remainder of this report is structured as follows:
 - **Chapter 8 (Methodology and Implementation Plan):** Engineering methodology, tools and technologies, step-by-step implementation plan, and evaluation metrics.
 - **Chapter 9 (Implementation / Development):** Implemented modules table, dated configuration screenshots, repository structure, and version control workflow.
 - **Chapter 10 (Results, Verification & Implementation Status):** 26-test automated verification suite, live cloud verification, reliability engineering, and IAM remediation.
-- **Chapter 11 (Conclusion & Future Scope):** Concluding synthesis, Edge TinyML acceleration, and Bedrock conversational AI roadmap.
-- **Chapter 12 (References):** Formal IEEE/ACM bibliographic citations.
+- **Chapter 11 (Discussion, Limitations and Risk Analysis):** In-depth discussion of clinical impact, comprehensive technical/cost/data limitations, and 6-dimension risk mitigation matrix.
+- **Chapter 12 (Conclusion & Future Scope):** Concluding synthesis, Edge TinyML acceleration, and Bedrock conversational AI roadmap.
+- **Chapter 13 (References):** Formal IEEE/ACM bibliographic citations.
 
 ---
 
@@ -1140,21 +1141,81 @@ gitGraph
 
 ---
 
-## 10. Conclusion and Future Scope
+## 11. Discussion, Limitations and Risk Analysis
 
-### 10.1 Conclusion
+### 11.1 Discussion
+
+The experimental and operational results confirm that the Behaviour-Aware Preventive Healthcare Recommendation System successfully resolves the foundational dichotomy identified in current digital health literature (P1–P15): the persistent disconnection between static epidemiological risk forecasting and real-time, context-aware physical activity coaching.
+
+#### 1. Interpretation of Dual Machine Learning Performance
+- **Chronic Disease Risk Stratification (XGBoost):** Achieving **86.2% test accuracy** and an **AUC-ROC of 0.84** on the balanced CDC BRFSS 2015 cohort (70,692 records) validates that non-invasive clinical and lifestyle indicators reliably predict underlying metabolic dysfunction. Feature importance analysis revealed that self-reported general health status (`GenHlth`, 38.4%), hypertension (`HighBP`, 18.2%), and body mass index (`BMI`, 14.1%) are the primary non-linear drivers of metabolic risk. Stratifying users into calibrated risk bands (`Low`: $p < 0.35$, `Medium`: $0.35 \le p < 0.65$, `High`: $p \ge 0.65$) establishes a solid clinical baseline that eliminates the ambiguity of raw probabilities.
+- **Kinematic Human Activity Recognition (Random Forest):** Achieving **96.5% overall accuracy** and a **macro F1-score of 0.96** across 18 distinct activity classes demonstrates that 30 statistical time-domain features ($\mu, \sigma, \text{Min}, \text{Max}, \text{AvgAbsDiff}$) extracted from 200-sample sliding windows ($10\text{ seconds}$ at 20 Hz) capture both static postural gravitational vectors (`Sitting` F1: 0.99, `Standing` F1: 0.95) and dynamic kinetic volatility (`Walking` F1: 0.97, `Jogging` F1: 0.98).
+- **Sub-50ms Serverless Compute Latency:** In-memory execution latency averaged $3.82\text{ ms}$ for feature extraction, $1.94\text{ ms}$ for Random Forest inference, and $2.38\text{ ms}$ for XGBoost scoring (totaling $< 10\text{ ms}$ in-memory and $< 180\text{ ms}$ end-to-end cloud latency). This proves that complex dual ML inference can execute serverlessly within tight clinical real-time bounds without requiring dedicated GPU clusters.
+
+#### 2. Practical Clinical and Behavioral Significance
+- **Closing the Real-Time Behavioral Gap:** Traditional digital health interventions broadcast rigid, scheduled notifications (e.g., "Walk 10,000 steps today") that ignore current user routines, triggering alert fatigue and app abandonment (>70% drop-off within 90 days). In contrast, this platform couples long-term risk with instantaneous kinematic state via the **Just-In-Time Adaptive Intervention (JITAI)** engine.
+- **Dynamic Risk Scaling via Composite Behavioral Risk ($R_{\text{composite}}$):** By continuously scaling baseline clinical risk as a mathematical function of uninterrupted acute sedentary duration ($>30\text{ minutes}$ vulnerability penalty) balanced against physical activity exertion rewards, the system provides immediate, understandable cause-and-effect feedback. Users observe their risk band dynamically worsen during prolonged sedentary desk work and actively improve upon engaging in brisk walking.
+- **Achievable Micro-Habits over Intimidating Prescriptions:** Rather than demanding unreachable lifestyle overhauls, the JITAI engine intervenes with achievable 5-minute walking prompts clinically proven to stimulate GLUT-4 glucose transporter translocation, blunting postprandial glycemic spikes in diabetic and pre-diabetic individuals.
+- **Economic Viability:** With zero idle server costs ($0.00 prototype on AWS Free Tier, scaling linearly to $0.0023/user/month at 10,000 MAUs), the architecture demonstrates that population-scale preventive healthcare is commercially sustainable.
+
+---
+
+### 11.2 Limitations
+
+To maintain academic rigor and transparent engineering documentation, the system's limitations across six technical and operational dimensions are formally detailed below:
+
+1. **Technical Limitations:**
+   - *Wearable Energy Consumption:* Continuous 20 Hz, 6-axis IMU sensor sampling and real-time MQTT streaming over Wi-Fi/Bluetooth impose noticeable battery drain on consumer smartwatches (battery depletion within 8–12 hours of continuous streaming). While addressed in future work through on-device TinyML quantization, edge transmission remains an energy bottleneck.
+   - *Network Connectivity Dependence:* The cloud inference pipeline requires active Internet connectivity. Although Pattern B buffers events in DynamoDB Streams, prolonged network dropouts on edge devices interrupt continuous real-time JITAI delivery until reconnection.
+
+2. **Data Limitations:**
+   - *Self-Reporting Bias in Clinical Training Data:* The CDC BRFSS 2015 dataset relies on telephone survey responses, which carry inherent subjective reporting bias (e.g., participants underreporting body weight, underestimating alcohol consumption, or overestimating physical activity).
+   - *Laboratory vs. Free-Living Kinematic Domain Shift:* The WISDM sensor dataset was collected in controlled laboratory settings with standardized wrist placement. Unconstrained real-world wrist movements (e.g., driving over bumpy roads, gesturing during conversation, carrying heavy bags, fidgeting) can introduce sensor noise and occasional misclassifications.
+
+3. **Cost Limitations:**
+   - While prototype testing incurred $0.00 within the AWS Free Tier, scaling unaggregated 20 Hz telemetry to 100,000+ concurrent users would incur linear cost increases on AWS IoT Core connectivity minutes and DynamoDB write operations unless sliding-window feature extraction is shifted upstream to the edge wearable.
+
+4. **Security Limitations:**
+   - In the development simulator environment, X.509 client certificates and RSA private keys are stored on the local file system. In an enterprise commercial deployment, device private keys must be burnt directly into hardware secure elements (e.g., Apple Secure Enclave, Android StrongBox HSMs) to guarantee physical tamper-resistance.
+
+5. **Time Constraints:**
+   - The academic semester timeline restricted evaluation to synthetic kinematic simulation suites (26 test cases) and historical sensor datasets. Conducting a multi-month longitudinal clinical randomized controlled trial (RCT) with human patients to track clinical biomarker changes (e.g., reductions in HbA1c, fasting plasma glucose, resting blood pressure) was outside the achievable timeframe.
+
+6. **Evaluation Limitations:**
+   - Behavioral adherence was verified algorithmically by tracking whether subsequent simulated sensor windows transitioned from `Sitting` to `Walking` within 15 minutes of a JITAI notification. Real-world human adherence involves complex psychosocial and environmental factors that cannot be completely captured through kinematic telemetry alone.
+
+---
+
+### 11.3 Risks and Mitigation
+
+A comprehensive failure mode and risk management assessment was conducted across cloud infrastructure, security, data integrity, vendor dependency, and behavioral adoption:
+
+| Risk Description | Likelihood / Impact | Mitigation Strategy | Residual Risk |
+| :--- | :---: | :--- | :---: |
+| **Unexpected Cloud Expenditure**<br>Surges in telemetry volume or runaway Lambda loops causing unexpected monthly AWS billing spikes. | **Medium / High** | • Enforced AWS Budgets with hard \$5.00 spend ceiling and automated SNS email alerts at 80% threshold.<br>• Architected 100% serverlessly with zero persistent VMs.<br>• DynamoDB provisioned in Pay-Per-Request (On-Demand) capacity mode.<br>• Native 24-hour DynamoDB Time-To-Live (TTL) auto-purging expired recommendations without consuming read/write capacity.<br>• 14-day CloudWatch log retention to prevent storage accrual. | **Low** |
+| **Credential Exposure / Misconfiguration**<br>Accidental leakage of AWS access keys or unauthorized API access compromising patient health records. | **Low / Critical** | • Strict least-privilege IAM policies (`infra/ml_engine_iam_policy.json`) scoped exclusively to specific table and stream ARNs.<br>• Zero credentials in source code or Git (enforced via `.gitignore` and pre-commit checks).<br>• REST endpoints protected by Amazon Cognito RS256 JWT Authorizers with 1-hour token validity.<br>• Backend Lambda microservices assume temporary STS credentials via execution roles.<br>• AWS IoT Core enforces mutual X.509 client certificate authentication. | **Low** |
+| **Data Quality / Telemetry Availability**<br>Corrupted, malformed, or missing sensor packets degrading ML inference accuracy. | **Medium / Medium** | • Strict JSON schema validation in `health-adherence-processor` Lambda before database writes.<br>• Feature extraction engine validates exactly 200 readings per 10s window and clips anomalous dynamic range spikes.<br>• Median and mode imputation fallbacks for missing clinical survey attributes in `profiles`.<br>• Multi-AZ active replication across AWS Mumbai (`ap-south-1`). | **Low** |
+| **Provider Dependency / Service Outage**<br>Vendor lock-in or regional AWS outages halting real-time recommendation delivery. | **Low / High** | • Built entirely on open industry standards (MQTT v3.1.1, RESTful HTTP API v2, OAuth 2.0 / OpenID Connect, Python 3.12, scikit-learn, XGBoost).<br>• Complete architectural portability mapping between Microsoft Azure (Review 1) and AWS (Final Review) documented.<br>• Decoupled operational stream runner daemon (`backend/runners/stream_runner.py`) enables offline local execution during control-plane outages. | **Low** |
+| **Serverless Cold-Start Latency**<br>Cold Lambda containers causing execution timeouts or dropped telemetry frames during traffic spikes. | **Medium / Medium** | • Module-level memory caching of pre-trained XGBoost and Random Forest models across warm executions.<br>• Optimized Lambda Layer (`ml-dependencies-layer`, 105.55 MB compressed, 243.42 MB uncompressed — strictly below 250 MB ceiling).<br>• 1024 MB RAM allocation providing dedicated vCPU compute, cutting cold start latency from $3.2\text{s}$ to $< 450\text{ms}$.<br>• Decoupled DynamoDB Streams (Pattern B) asynchronously buffers telemetry, guaranteeing zero dropped sensor packets. | **Very Low** |
+| **Alert Fatigue & User Non-Adherence**<br>Repetitive, poorly timed notifications annoying users and driving app abandonment. | **High / High** | • Context-aware JITAI throttling: interventions trigger only upon sustained inactivity ($T_{\text{sedentary}} \ge 30\text{ min}$) or verified active pacing, eliminating arbitrary scheduled alerts.<br>• Positive behavioral reinforcement for physical activity.<br>• Closed-loop adherence verification tracks whether users comply with suggestions, suppressing intrusive nudges when users are actively busy. | **Low** |
+
+---
+
+## 12. Conclusion and Future Scope
+
+### 12.1 Conclusion
 This project successfully designed, implemented, evaluated, and deployed an end-to-end, cloud-native **Behaviour-Aware Preventive Healthcare Recommendation System on AWS**. Fulfilling and exceeding every milestone committed in Review 1, the platform bridges the critical clinical gap between passive wearable sensor monitoring and long-term epidemiological chronic disease prevention. 
 
 By combining an **XGBoost Risk Classifier (86.2% accuracy, 0.84 AUC-ROC)** trained on 253,680 CDC BRFSS records with a **Random Forest HAR Classifier (96.5% accuracy, 0.96 F1-score)** trained on 20 Hz WISDM smartwatch telemetry, the system enables context-aware Just-In-Time Adaptive Interventions (JITAI). Deployed entirely serverlessly on AWS across Amplify, Cognito, IoT Core, Lambda, and DynamoDB, the solution delivers sub-50ms inference, resilient zero-loss ingestion, automated TTL database cleanup, and an intuitive user dashboard at zero idle infrastructure cost.
 
-### 10.2 Future Scope
+### 12.2 Future Scope
 1. **Edge TinyML Acceleration:** Compiling the Random Forest classifier into a quantized TinyML model (via TensorFlow Lite Micro or CoreML) running directly on smartwatch firmware (Apple Watch / WearOS). By performing feature extraction and classification on-device, the wearable only needs to transmit 1-byte activity labels every minute, reducing Bluetooth/Wi-Fi radio battery consumption by over 95%.
 2. **Guardrailed Generative AI (Amazon Bedrock):** Integrating **Amazon Bedrock (Meta Llama 3.1 / Claude 3 Haiku)** to translate structured recommendation codes into empathetic, conversational motivational interview coaching. Strict two-tier guardrails will enforce medical accuracy and eliminate hallucinations.
 3. **Clinical EHR Integration via FHIR:** Establishing bidirectional HL7 Fast Healthcare Interoperability Resources (FHIR) API connectors to securely sync patient survey profiles and longitudinal risk trajectories with clinical Electronic Health Record (EHR) systems (e.g., Epic, Cerner).
 
 ---
 
-## 11. References
+## 13. References
 
 1. Ong, Q. C., et al., "Advancing health coaching: A comparative study of large language model and health coaches," *Artificial Intelligence in Medicine*, vol. 157, p. 102891, 2024. [Elsevier]
 2. Hegde, N., et al., "Infusing behavior science into large language models for activity coaching," *PLOS Digital Health*, vol. 3, no. 5, p. e0000512, 2024.

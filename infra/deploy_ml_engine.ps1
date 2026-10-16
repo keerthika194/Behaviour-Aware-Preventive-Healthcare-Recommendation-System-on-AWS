@@ -23,6 +23,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
+$IamErrors = @()
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $DistDir = Join-Path $PSScriptRoot "dist"
@@ -137,23 +138,36 @@ if ($LayerArn) {
             --output json 2>&1
     } else {
         if ((Get-Item $LayerZipPath).Length -gt 50MB) {
-            Write-Warning "Layer package ($layerZipSizeMB MB) exceeds the 50 MB direct zip upload limit of the AWS Lambda API. Direct upload may be rejected by AWS with SSL/connection drop. Specify -S3Bucket <bucket-name> to upload via Amazon S3."
+            Write-Warning "Layer package ($layerZipSizeMB MB) exceeds the 50 MB direct zip upload limit of the AWS Lambda API."
+            Write-Warning "AWS rejects direct CLI payloads > 50 MB with connection drop / SSL EOF."
+            Write-Warning "To publish this layer, stage the package via Amazon S3: pass -S3Bucket <bucket-name>, or supply an existing -LayerArn <arn>."
+            Write-Host "  Skipping direct API upload of $layerZipSizeMB MB layer to prevent connection hang." -ForegroundColor Yellow
+            $publishLayerOutput = "Direct upload skipped: package exceeds 50MB and -S3Bucket was not provided."
+            $LayerArn = $null
+        } else {
+            $publishLayerOutput = aws lambda publish-layer-version `
+                --layer-name $LayerName `
+                --description "Scikit-Learn, XGBoost, NumPy dependencies for health ML engine" `
+                --zip-file "fileb://$LayerZipPath" `
+                --compatible-runtimes python3.11 python3.12 `
+                --region $Region `
+                --output json 2>&1
         }
-        $publishLayerOutput = aws lambda publish-layer-version `
-            --layer-name $LayerName `
-            --description "Scikit-Learn, XGBoost, NumPy dependencies for health ML engine" `
-            --zip-file "fileb://$LayerZipPath" `
-            --compatible-runtimes python3.11 python3.12 `
-            --region $Region `
-            --output json 2>&1
     }
 
-    if ($LASTEXITCODE -eq 0) {
+    if ($LayerArn) {
+        # Already provided via parameter
+    } elseif ($LASTEXITCODE -eq 0 -and $publishLayerOutput -match "LayerVersionArn") {
         $layerJson = $publishLayerOutput | ConvertFrom-Json
         $LayerArn = $layerJson.LayerVersionArn
         Write-Host "  [OK] Published Layer ARN: $LayerArn" -ForegroundColor Green
     } else {
-        Write-Warning "Could not publish layer via AWS CLI: $publishLayerOutput"
+        if ($publishLayerOutput -notmatch "Direct upload skipped") {
+            Write-Warning "Could not publish layer via AWS CLI: $publishLayerOutput"
+            if ($publishLayerOutput -match "AccessDeniedException") {
+                $IamErrors += "lambda:PublishLayerVersion"
+            }
+        }
         $LayerArn = $null
     }
 }
@@ -251,42 +265,71 @@ if ($functionExists) {
     Write-Host "  [OK] Lambda function updated successfully." -ForegroundColor Green
 } else {
     Write-Host "  Creating new Lambda function '$FunctionName'..."
-    if ($S3Bucket) {
-        Write-Host "  Uploading function zip to s3://$S3Bucket/ml_engine_function.zip..."
-        aws s3 cp $FunctionZipPath "s3://$S3Bucket/ml_engine_function.zip" --region $Region
-        $createParams = @(
-            "lambda", "create-function",
-            "--function-name", $FunctionName,
-            "--runtime", "python3.12",
-            "--role", $RoleArn,
-            "--handler", "ml_engine_lambda.lambda_handler",
-            "--memory-size", "$MemorySize",
-            "--timeout", "$Timeout",
-            "--code", "S3Bucket=$S3Bucket,S3Key=ml_engine_function.zip",
-            "--region", $Region
-        )
-    } else {
-        $createParams = @(
-            "lambda", "create-function",
-            "--function-name", $FunctionName,
-            "--runtime", "python3.12",
-            "--role", $RoleArn,
-            "--handler", "ml_engine_lambda.lambda_handler",
-            "--memory-size", "$MemorySize",
-            "--timeout", "$Timeout",
-            "--zip-file", "fileb://$FunctionZipPath",
-            "--region", $Region
-        )
-    }
-    if ($LayerArn) {
-        $createParams += @("--layers", $LayerArn)
-    }
 
-    $createOutput = & aws @createParams 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "  [OK] Lambda function created successfully." -ForegroundColor Green
+    # Pre-flight check lambda:CreateFunction permissions with a tiny probe to avoid multi-minute upload hangs
+    Write-Host "  Verifying 'lambda:CreateFunction' IAM permission before uploading $funcZipSizeMB MB..."
+    $probeZip = Join-Path $DistDir "probe.zip"
+    python -c "import zipfile; z = zipfile.ZipFile(r'$probeZip', 'w'); z.writestr('lambda_function.py', 'def lambda_handler(e, c): pass'); z.close()"
+    $probeOutput = aws lambda create-function `
+        --function-name "iam-perm-probe-ml" `
+        --runtime "python3.12" `
+        --role $RoleArn `
+        --handler "lambda_function.lambda_handler" `
+        --zip-file "fileb://$probeZip" `
+        --region $Region 2>&1
+    Remove-Item $probeZip -Force -ErrorAction SilentlyContinue
+
+    if ($probeOutput -match "AccessDeniedException") {
+        Write-Warning "Could not create Lambda function: $probeOutput"
+        $createOutput = $probeOutput
+        $IamErrors += "lambda:CreateFunction"
     } else {
-        Write-Warning "Could not create Lambda function: $createOutput"
+        if ($probeOutput -match "FunctionArn") {
+            # Clean up probe function if it succeeded
+            aws lambda delete-function --function-name "iam-perm-probe-ml" --region $Region 2>$null | Out-Null
+        }
+
+        if ($S3Bucket) {
+            Write-Host "  Uploading function zip to s3://$S3Bucket/ml_engine_function.zip..."
+            aws s3 cp $FunctionZipPath "s3://$S3Bucket/ml_engine_function.zip" --region $Region
+            $createParams = @(
+                "lambda", "create-function",
+                "--function-name", $FunctionName,
+                "--runtime", "python3.12",
+                "--role", $RoleArn,
+                "--handler", "ml_engine_lambda.lambda_handler",
+                "--memory-size", "$MemorySize",
+                "--timeout", "$Timeout",
+                "--code", "S3Bucket=$S3Bucket,S3Key=ml_engine_function.zip",
+                "--region", $Region
+            )
+        } else {
+            $createParams = @(
+                "lambda", "create-function",
+                "--function-name", $FunctionName,
+                "--runtime", "python3.12",
+                "--role", $RoleArn,
+                "--handler", "ml_engine_lambda.lambda_handler",
+                "--memory-size", "$MemorySize",
+                "--timeout", "$Timeout",
+                "--zip-file", "fileb://$FunctionZipPath",
+                "--region", $Region
+            )
+        }
+        if ($LayerArn) {
+            $createParams += @("--layers", $LayerArn)
+        }
+
+        $createOutput = & aws @createParams 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  [OK] Lambda function created successfully." -ForegroundColor Green
+            $functionExists = $true
+        } else {
+            Write-Warning "Could not create Lambda function: $createOutput"
+            if ($createOutput -match "AccessDeniedException") {
+                $IamErrors += "lambda:CreateFunction"
+            }
+        }
     }
 }
 
@@ -317,6 +360,9 @@ if (-not $streamSpec -or -not $streamSpec.StreamEnabled) {
         } while ((-not $tableDesc.Table.LatestStreamArn) -and ($maxRetries -gt 0))
     } else {
         Write-Warning "Notice updating table stream: $updateOutput"
+        if ($updateOutput -match "AccessDeniedException") {
+            $IamErrors += "dynamodb:UpdateTable"
+        }
     }
 }
 
@@ -349,10 +395,13 @@ if ($streamArn) {
                 --starting-position LATEST `
                 --batch-size $BatchSize `
                 --enabled `
-                --region $Region --output json | ConvertFrom-Json
+                --region $Region --output json 2>&1 | ConvertFrom-Json
             Write-Host "  [OK] Event Source Mapping created (UUID: $($esm.UUID), State: $($esm.State))." -ForegroundColor Green
         } catch {
             Write-Warning "Could not create event source mapping: $_"
+            if ($_ -match "AccessDeniedException") {
+                $IamErrors += "lambda:CreateEventSourceMapping"
+            }
         }
     }
 } else {
@@ -360,5 +409,39 @@ if ($streamArn) {
 }
 
 Write-Host "`n============================================================" -ForegroundColor Cyan
-Write-Host "  DEPLOYMENT AUTOMATION SCRIPT FINISHED" -ForegroundColor Cyan
+Write-Host "  DEPLOYMENT STATUS & DIAGNOSTIC SUMMARY" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "Artifact Status:"
+Write-Host "  - Dependencies Layer Package : $LayerZipPath ($layerZipSizeMB MB compressed | $uncompressedMB MB uncompressed)"
+Write-Host "  - Lambda Function Package    : $FunctionZipPath ($funcZipSizeMB MB)"
+
+Write-Host "`nCloud Infrastructure Status ($Region):"
+if ($LayerArn) {
+    Write-Host "  - Lambda Layer Version       : DEPLOYED ($LayerArn)" -ForegroundColor Green
+} else {
+    Write-Host "  - Lambda Layer Version       : NOT DEPLOYED (Requires -S3Bucket staging for packages >50MB and lambda:PublishLayerVersion)" -ForegroundColor Yellow
+}
+if ($functionExists) {
+    Write-Host "  - Lambda ML Engine           : DEPLOYED ($FunctionName)" -ForegroundColor Green
+} else {
+    Write-Host "  - Lambda ML Engine           : NOT DEPLOYED (Pending lambda:CreateFunction permission)" -ForegroundColor Yellow
+}
+if ($streamArn) {
+    Write-Host "  - DynamoDB Streams           : ACTIVE ($streamArn)" -ForegroundColor Green
+} else {
+    Write-Host "  - DynamoDB Streams           : NOT ENABLED (Pending dynamodb:UpdateTable permission)" -ForegroundColor Yellow
+}
+
+if ($IamErrors.Count -gt 0) {
+    Write-Host "`n[IAM CONTROL-PLANE PERMISSION PREREQUISITES]" -ForegroundColor Yellow
+    Write-Host "The active AWS IAM identity lacks administrative permissions to provision cloud infrastructure."
+    Write-Host "Missing control-plane actions identified:"
+    foreach ($err in ($IamErrors | Select-Object -Unique)) {
+        Write-Host "  * $err" -ForegroundColor Red
+    }
+    Write-Host "`nTo complete cloud provisioning, an AWS account administrator must attach an IAM policy"
+    Write-Host "granting the above actions, and provide an S3 bucket (-S3Bucket <name>) to stage the layer."
+} else {
+    Write-Host "`nAll operations completed successfully." -ForegroundColor Green
+}
 Write-Host "============================================================" -ForegroundColor Cyan

@@ -65,15 +65,17 @@ By pairing passive 20 Hz smartwatch telemetry with epidemiological risk modeling
 
 ### 1.5 Report Organisation
 The remainder of this report is structured as follows:
-- **Chapter 2 (Literature Survey & Research Gap Analysis):** Comprehensive critical review of 15 relevant studies and identification of the research gap.
-- **Chapter 3 (Project Objectives & Expected Outcomes):** Six measurable project objectives, deliverables, and assessment metrics.
-- **Chapter 4 (Dataset & Preprocessing Details):** In-depth exploration of CDC BRFSS 2015 and WISDM datasets, feature engineering mathematical formulations, and balancing techniques.
-- **Chapter 5 (Machine Learning Models & Performance Evaluation):** Architecture, hyperparameters, validation scores, and latency benchmarks for the dual-ML pipeline.
-- **Chapter 6 (Proposed System Architecture & Workflow):** Detailed component diagrams, event-driven decoupled stream processing, and mathematical formulation of behavioral risk.
-- **Chapter 7 (Cloud Platform and Services Planning):** Cloud service inventory, deployment topology, comprehensive cost estimations, and portability mapping.
-- **Chapter 8 (Results, Implementation Status & Verification):** Test execution records, unit/integration verification, and cloud reliability engineering solutions.
-- **Chapter 9 (Conclusion & Future Scope):** Concluding remarks, TinyML edge execution, and generative AI roadmap.
-- **References:** Formal bibliographic citations.
+- **Chapter 2 (Literature Survey & Research Gap Analysis):** Comprehensive critical review of 15 peer-reviewed studies across 5 core capability dimensions and formal gap identification.
+- **Chapter 3 (Project Objectives & Expected Outcomes):** Six measurable engineering objectives, deliverables (D1–D6), and assessment criteria.
+- **Chapter 4 (Novelty Summary):** Explicit comparison matrix contrasting proposed capabilities against existing baselines across four technical dimensions and central novelty formulation.
+- **Chapter 5 (Dataset & Preprocessing Details):** In-depth exploration of CDC BRFSS 2015 and WISDM datasets, 30 time-domain feature engineering formulas, and data balancing techniques.
+- **Chapter 6 (Machine Learning Models & Performance Evaluation):** Architecture, hyperparameters, validation scores, and latency benchmarks for the dual-ML pipeline.
+- **Chapter 7 (Proposed System Architecture & Workflow):** Component topologies, event-driven decoupled stream processing (Pattern B), JITAI engine, and composite behavioral risk formulation.
+- **Chapter 8 (Cloud Platform and Services Planning):** Cloud service inventory, deployment topology, comprehensive cost estimations, and portability mapping.
+- **Chapter 9 (Implementation / Development):** Implemented modules table, dated configuration screenshots, repository structure, and version control workflow.
+- **Chapter 10 (Results, Verification & Implementation Status):** 26-test automated verification suite, live cloud verification, reliability engineering, and IAM remediation.
+- **Chapter 11 (Conclusion & Future Scope):** Concluding synthesis, Edge TinyML acceleration, and Bedrock conversational AI roadmap.
+- **Chapter 12 (References):** Formal IEEE/ACM bibliographic citations.
 
 ---
 
@@ -218,7 +220,23 @@ This project bridges this gap by introducing a unified, event-driven cloud archi
 
 ---
 
-## 4. Dataset and Preprocessing Details
+## 4. Novelty Summary
+
+This section details the technical and architectural novelty of the Behaviour-Aware Preventive Healthcare Recommendation System compared to existing commercial and academic digital health platforms. The differentiation across four foundational dimensions is summarized in the matrix below:
+
+| Dimension | Existing Approach / Limitation | Proposed Difference in this System | Evidence / Evaluation |
+| :--- | :--- | :--- | :--- |
+| **New Feature** | Traditional digital health apps operate on isolated static questionnaires (e.g., periodic ADA risk score calculators) or broadcast rigid, pre-scheduled daily step goals (e.g., "Walk 10,000 steps") that ignore whether the user is actively exercising, driving, or in a meeting. | Introduces a closed-loop, dual-modal recommendation engine that couples long-term epidemiological chronic metabolic risk estimation with continuous, passive 20 Hz smartwatch kinematic activity recognition to trigger context-aware Just-In-Time Adaptive Interventions (JITAI). | Live operational web dashboard deployed on AWS Amplify (`https://main.d13b5qy6zqsapl.amplifyapp.com`) displaying synchronized real-time risk bands and activity states; validated across 26 automated integration tests (`scratch/test_ml_lambda.py`). |
+| **Algorithm / Processing** | Baseline systems either treat disease risk as a static, time-invariant probability or rely on simple rule-based thresholds that fail to adjust guidance according to recent physical routines. | Formulates a mathematical **Composite Behavioral Risk Index** ($R_{\text{composite}}$) that dynamically modulates baseline clinical risk as a non-linear continuous function of acute sedentary duration ($> 30\text{ min}$ vulnerability penalty) balanced against physical activity exertion rewards. | Dual ML inference pipeline achieving **86.2% accuracy / 0.84 AUC-ROC** on 253,680 CDC BRFSS records (XGBoost) and **96.5% accuracy / 0.96 macro F1-score** across 18 activity classes on 20 Hz WISDM data (Random Forest), with combined in-memory execution latency $< 20\text{ ms}$. |
+| **Cloud Architecture / Integration** | Existing research implementations rely on monolithic virtual machines or synchronous REST pipelines that couple telemetry ingestion directly to model inference, causing dropped sensor frames during traffic bursts and high monthly idle server bills. | Deploys a cloud-native, serverless decoupled event-streaming architecture (**Pattern B**) using AWS IoT Core (MQTT/TLS 1.3), Amazon DynamoDB Streams (`NEW_IMAGE`), and an optimized AWS Lambda Layer (105.55 MB compressed, 243.42 MB uncompressed — compliant with AWS 250 MB limit). | Zero telemetry drop rate across continuous 20 Hz sensor streaming; sub-50ms inference latency; zero idle infrastructure cost ($0.00/month prototype on AWS Free Tier, scaling linearly to $0.0025/user/month at 10,000 MAUs). |
+| **Security / Automation / Scalability** | Unindexed NoSQL database scans in naive cloud setups trigger execution timeouts and HTTP 500 errors as historical data accumulates; lack automated lifecycle management, exposing storage bloat and stale records. | Implements automated database hygiene via native **Amazon DynamoDB Time-To-Live (TTL)** purging records older than 24 hours (`expire_at` epoch timestamp); Cognito RS256 JWT RBAC user isolation; and strict API Gateway CORS preflight whitelisting. | Live database audit verifying 172+ recommendations successfully stamped with `expire_at` and automatically purged without consuming provisioned read/write capacity; zero HTTP 500 timeouts; 100% pass rate in adversarial test suite. |
+
+### Central Novelty Claim
+The central novelty of this system lies in the architectural coupling of population-scale epidemiological chronic disease risk modeling with high-frequency inertial smartwatch activity recognition into a single, closed-loop serverless cloud pipeline. Rather than delivering static health risk scores or context-blind daily activity notifications, the system continuously scales baseline metabolic risk as an empirical function of acute uninterrupted sedentary duration versus physical exertion. This enables a cloud-native Just-In-Time Adaptive Intervention (JITAI) engine on AWS that intercepts prolonged sedentary behavior with achievable, clinically calibrated micro-habits while reinforcing active physical exertion. The end-to-end design operates with zero idle infrastructure costs through event-driven decoupled stream processing and automated 24-hour database lifecycle hygiene.
+
+---
+
+## 5. Dataset and Preprocessing Details
 
 ### 4.1 Dataset 1: CDC BRFSS 2015 (Chronic Disease Risk)
 * **Origin:** Centers for Disease Control and Prevention (CDC) – Behavioral Risk Factor Surveillance System.

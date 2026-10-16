@@ -84,14 +84,16 @@ export const signInUser = (username: string, password: string): Promise<UserSess
  */
 export const signUpUser = (username: string, email: string, password: string): Promise<any> => {
   return new Promise((resolve, reject) => {
+    // This Cognito User Pool is configured with 'Email' as the primary username attribute
+    const cognitoUsername = (email && email.trim()) || username.trim();
     const attributeList = [
       new CognitoUserAttribute({
         Name: 'email',
-        Value: email,
+        Value: email.trim(),
       }),
     ];
 
-    userPool.signUp(username, password, attributeList, [], (err, result) => {
+    userPool.signUp(cognitoUsername, password, attributeList, [], (err, result) => {
       if (err) {
         reject(err);
         return;
@@ -107,12 +109,12 @@ export const signUpUser = (username: string, email: string, password: string): P
 export const confirmSignUpUser = (username: string, code: string): Promise<any> => {
   return new Promise((resolve, reject) => {
     const userData = {
-      Username: username,
+      Username: username.trim(),
       Pool: userPool,
     };
     const cognitoUser = new CognitoUser(userData);
 
-    cognitoUser.confirmRegistration(code, true, (err, result) => {
+    cognitoUser.confirmRegistration(code.trim(), true, (err, result) => {
       if (err) {
         reject(err);
         return;

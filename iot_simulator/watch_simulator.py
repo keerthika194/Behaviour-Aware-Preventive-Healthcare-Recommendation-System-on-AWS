@@ -145,6 +145,24 @@ def build_10s_windows(
             "sensor_window_seconds": 10,
             "samples_count": len(acc_chunk),
 
+            "accel": [
+                {
+                    "x": round(r["x"], 6),
+                    "y": round(r["y"], 6),
+                    "z": round(r["z"], 6)
+                }
+                for r in acc_chunk
+            ],
+
+            "gyro": [
+                {
+                    "x": round(r["x"], 6),
+                    "y": round(r["y"], 6),
+                    "z": round(r["z"], 6)
+                }
+                for r in gyro_chunk
+            ],
+
             "accelerometer": {
                 "x": [
                     round(r["x"], 6)

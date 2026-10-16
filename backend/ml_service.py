@@ -354,28 +354,30 @@ def process_latest_dynamodb_event(user_id=None):
     # 2. Retrieve user's health profile from DynamoDB 'profiles' table
     risk_profile = get_user_risk_profile(app_user_id)
     if not risk_profile:
-        print(f"\n[WARNING] User {app_user_id} has not saved a health profile yet.")
-        print("Please log into the web app, complete the Profile page, and save your health profile.")
-        return None
+        print(f"\n[NOTICE] User {app_user_id} has not customized their profile in DynamoDB yet. Using baseline clinical indicators.")
+        risk_profile = create_demo_risk_profile()
 
     # 3. Read latest telemetry event from DynamoDB 'activity_events'
     response = activity_table.scan()
     items = response.get("Items", [])
 
+    def is_valid_sensor_event(ev):
+        sf = ev.get("sensor_features", {})
+        if not isinstance(sf, dict) or len(sf) != 30:
+            return False
+        return any(float(v) != 0.0 for v in sf.values())
+
     matching_items = [
         item for item in items
-        if "sensor_features" in item and len(item["sensor_features"]) == 30
+        if is_valid_sensor_event(item) and item.get("status") != "processed"
     ]
 
     if not matching_items:
-        raise ValueError("No DynamoDB telemetry event with 30 sensor features was found in 'activity_events'.")
+        return None
 
-    # Sort matching items by timestamp or pick the last item
+    # Sort matching items by timestamp and pick the latest unprocessed event with real sensor features
     matching_items.sort(key=lambda x: str(x.get("timestamp", "")))
     event = matching_items[-1]
-
-    if event.get("status") == "processed":
-        return None
 
     print(f"\n[OK] Processing latest telemetry event: {event.get('event_id')}")
 
@@ -479,11 +481,17 @@ if __name__ == "__main__":
             try:
                 response = activity_table.scan()
                 items = response.get("Items", [])
-                matching = [i for i in items if "sensor_features" in i and len(i["sensor_features"]) == 30]
+                matching = [
+                    i for i in items
+                    if "sensor_features" in i
+                    and len(i["sensor_features"]) == 30
+                    and any(float(v) != 0.0 for v in i["sensor_features"].values())
+                    and i.get("status") != "processed"
+                ]
                 if matching:
                     matching.sort(key=lambda x: str(x.get("timestamp", "")))
                     latest = matching[-1]
-                    if latest.get("status") != "processed" and latest.get("event_id") != last_processed_event_id:
+                    if latest.get("event_id") != last_processed_event_id:
                         process_latest_dynamodb_event(user_id=args.user)
                         last_processed_event_id = latest.get("event_id")
             except Exception as e:

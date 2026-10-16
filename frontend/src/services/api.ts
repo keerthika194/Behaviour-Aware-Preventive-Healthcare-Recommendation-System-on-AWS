@@ -50,6 +50,32 @@ export async function getRecommendations(
   userId: string | number
 ): Promise<RecommendationResponse[]> {
   try {
+    // If running in local demo mode with Patient ID 1600, serve demo response without remote AWS auth
+    if (String(userId) === '1600') {
+      return [
+        {
+          recommendation_id: 'rec_demo_1600',
+          user_id: '1600',
+          subject_id: 1600,
+          activity: 'Sitting',
+          activity_confidence: 0.985,
+          risk_score: 0.42,
+          risk_band: 'Medium',
+          recommendation:
+            'Your preventive risk assessment indicates moderate risk. Avoid continuous prolonged sitting. Intercept sedentary periods with light stretching or walking.',
+          recommendation_text:
+            'Your preventive risk assessment indicates moderate risk. Avoid continuous prolonged sitting. Intercept sedentary periods with light stretching or walking.',
+          recommendations: [
+            'Your preventive risk assessment indicates moderate risk. Increase daily physical activity and monitor dietary habits.',
+            'Incorporate structured cardiovascular exercises (such as brisk walking or cycling) at least 3-4 days per week.',
+            'Avoid continuous prolonged sitting. Intercept sedentary periods with light stretching or walking.',
+          ],
+          timestamp: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ];
+    }
+
     const headers = await getAuthHeaders();
 
     const url =
@@ -138,6 +164,40 @@ export async function createRecommendation(
  */
 export async function getProfile(): Promise<Record<string, any>> {
   try {
+    const session = await getCurrentSession();
+    if (session?.userSub === '1600') {
+      const cached = localStorage.getItem('demo_profile_1600');
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch {}
+      }
+      return {
+        user_id: '1600',
+        HighBP: 0,
+        HighChol: 0,
+        CholCheck: 1,
+        BMI: 25.0,
+        Smoker: 0,
+        Stroke: 0,
+        HeartDiseaseorAttack: 0,
+        PhysActivity: 1,
+        Fruits: 1,
+        Veggies: 1,
+        HvyAlcoholConsump: 0,
+        AnyHealthcare: 1,
+        NoDocbcCost: 0,
+        GenHlth: 2,
+        MentHlth: 0,
+        PhysHlth: 0,
+        DiffWalk: 0,
+        Sex: 1,
+        Age: 5,
+        Education: 5,
+        Income: 6,
+      };
+    }
+
     const headers = await getAuthHeaders();
 
     const url = `${API_BASE_URL}/profile`;
@@ -177,6 +237,16 @@ export async function saveProfile(
   profileData: Record<string, any>
 ): Promise<Record<string, any>> {
   try {
+    const session = await getCurrentSession();
+    if (session?.userSub === '1600') {
+      localStorage.setItem('demo_profile_1600', JSON.stringify(profileData));
+      return {
+        message: 'Demo health profile saved successfully.',
+        user_id: '1600',
+        profile: profileData,
+      };
+    }
+
     const headers = await getAuthHeaders();
 
     const url = `${API_BASE_URL}/profile`;

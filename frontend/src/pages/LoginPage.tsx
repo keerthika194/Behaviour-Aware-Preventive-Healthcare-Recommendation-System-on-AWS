@@ -34,11 +34,13 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      await signup(username, email, password);
-      setMessage('Registration successful! Please enter the verification code sent to your email.');
+      const emailTrimmed = email.trim();
+      await signup(emailTrimmed, emailTrimmed, password);
+      setUsername(emailTrimmed);
+      setMessage('Registration successful! Please enter the 6-digit verification code sent to your email.');
       setTab('confirm');
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+      setError(err.message || 'Registration failed. Please check your details and try again.');
     } finally {
       setLoading(false);
     }
@@ -116,15 +118,15 @@ export const LoginPage: React.FC = () => {
           {tab === 'signin' && (
             <form onSubmit={handleSignIn} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700">Username or Patient ID</label>
+                <label className="block text-xs font-semibold text-slate-700">Email Address</label>
                 <div className="relative mt-1">
-                  <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <input
-                    type="text"
+                    type="email"
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter your username"
+                    placeholder="Enter your registered email"
                     className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs focus:border-slate-900 focus:outline-none"
                   />
                 </div>
@@ -197,10 +199,13 @@ export const LoginPage: React.FC = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimum 8 characters"
+                    placeholder="e.g. HealthPass123!"
                     className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs focus:border-slate-900 focus:outline-none"
                   />
                 </div>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Must be at least 8 characters with uppercase, lowercase, numbers, and symbols.
+                </p>
               </div>
 
               <button

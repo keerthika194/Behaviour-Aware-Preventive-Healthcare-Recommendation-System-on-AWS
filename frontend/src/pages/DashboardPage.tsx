@@ -21,6 +21,7 @@ import {
 export function DashboardPage() {
   const { user } = useAuth();
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
+  const [history, setHistory] = useState<RecommendationResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // Frontend-only acknowledge state — no backend changes needed
@@ -40,6 +41,28 @@ export function DashboardPage() {
       const data = await getRecommendations(userId);
       if (Array.isArray(data) && data.length > 0) {
         setRecommendation(data[0]);
+        setHistory((prev) => {
+          const map = new Map<string, RecommendationResponse>();
+          // Add all returned records
+          data.forEach((item) => {
+            const key = item.recommendation_id || item.event_id || item.timestamp || JSON.stringify(item);
+            map.set(key, item);
+          });
+          // Merge with previously accumulated records
+          prev.forEach((item) => {
+            const key = item.recommendation_id || item.event_id || item.timestamp || JSON.stringify(item);
+            if (!map.has(key)) {
+              map.set(key, item);
+            }
+          });
+          const merged = Array.from(map.values());
+          merged.sort((a, b) => {
+            const tA = new Date(a.timestamp || a.created_at || 0).getTime();
+            const tB = new Date(b.timestamp || b.created_at || 0).getTime();
+            return tB - tA;
+          });
+          return merged.slice(0, 30);
+        });
       } else {
         setRecommendation(null);
       }
@@ -416,40 +439,59 @@ export function DashboardPage() {
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Recent Activity
+                    Recent Activity History
                   </h3>
-                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500 uppercase">
-                    Latest Record
+                  <span className="rounded bg-teal-50 px-2 py-0.5 text-[9px] font-bold text-teal-700 uppercase">
+                    {history.length} {history.length === 1 ? 'Record' : 'Records'} Logged
                   </span>
                 </div>
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-slate-400">
-                      <th className="pb-2 font-semibold">Time</th>
-                      <th className="pb-2 font-semibold">Activity</th>
-                      <th className="pb-2 font-semibold">Risk</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="py-3 text-slate-500 whitespace-nowrap">
-                        {recommendation?.timestamp
-                          ? new Date(recommendation.timestamp).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
-                          : 'Latest'}
-                      </td>
-                      <td className="py-3 font-bold text-slate-900">{activity}</td>
-                      <td className="py-3">
-                        {riskBand ? <RiskBadge level={riskBand} size="sm" /> : null}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div className="max-h-64 overflow-y-auto pr-1">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 sticky top-0 bg-white">
+                        <th className="pb-2 font-semibold">Time</th>
+                        <th className="pb-2 font-semibold">Activity</th>
+                        <th className="pb-2 font-semibold">Risk</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {history.length > 0 ? (
+                        history.map((rec, idx) => (
+                          <tr key={rec.recommendation_id || idx} className="hover:bg-slate-50/50">
+                            <td className="py-2.5 text-slate-500 whitespace-nowrap text-[11px]">
+                              {rec.timestamp
+                                ? new Date(rec.timestamp).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                  })
+                                : 'Recent'}
+                            </td>
+                            <td className="py-2.5 font-bold text-slate-900">
+                              {rec.activity || 'Activity'}
+                              {rec.activity_confidence != null && (
+                                <span className="ml-1.5 text-[10px] font-normal text-slate-400">
+                                  ({(Number(rec.activity_confidence) * 100).toFixed(0)}%)
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5">
+                              {rec.risk_band ? <RiskBadge level={rec.risk_band} size="sm" /> : null}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={3} className="py-4 text-center text-slate-400 text-xs">
+                            No activities logged yet
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
                 <p className="mt-3 text-[10px] text-slate-400">
-                  Showing the most recent session from the recommendation pipeline.
-                  Visit the Activity page for full sensor telemetry details.
+                  Continuous real-time telemetry log from your smartwatch stream.
                 </p>
               </div>
             </div>

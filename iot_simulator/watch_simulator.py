@@ -549,11 +549,21 @@ def main():
         )
     )
 
+    # Auto-detect AWS mode if configuration and certificates exist
+    sim_dir = pathlib.Path(__file__).resolve().parent
+    env_file = sim_dir / ".env"
+    default_mode = "local"
+    if env_file.exists():
+        from dotenv import dotenv_values
+        cfg = dotenv_values(env_file)
+        if cfg.get("AWS_IOT_ENDPOINT") and (sim_dir / cfg.get("AWS_IOT_CERT_PATH", "")).exists():
+            default_mode = "aws"
+
     parser.add_argument(
         "--mode",
         choices=["local", "aws"],
-        default="local",
-        help="Simulation mode (default: local)"
+        default=default_mode,
+        help=f"Simulation mode (default: {default_mode})"
     )
 
     parser.add_argument(

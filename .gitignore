@@ -62,3 +62,6 @@ datasets/wisdm_smartwatch/raw/
 
 # Large Model Files
 *.pkl
+
+# Agent Metadata
+.agents/

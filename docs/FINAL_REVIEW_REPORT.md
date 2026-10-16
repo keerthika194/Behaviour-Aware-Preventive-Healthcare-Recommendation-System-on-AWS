@@ -68,10 +68,10 @@ The remainder of this report is structured as follows:
 - **Chapter 2 (Literature Survey & Research Gap Analysis):** Comprehensive critical review of 15 peer-reviewed studies across 5 core capability dimensions and formal gap identification.
 - **Chapter 3 (Project Objectives & Expected Outcomes):** Six measurable engineering objectives, deliverables (D1–D6), and assessment criteria.
 - **Chapter 4 (Novelty Summary):** Explicit comparison matrix contrasting proposed capabilities against existing baselines across four technical dimensions and central novelty formulation.
-- **Chapter 5 (Dataset & Preprocessing Details):** In-depth exploration of CDC BRFSS 2015 and WISDM datasets, 30 time-domain feature engineering formulas, and data balancing techniques.
-- **Chapter 6 (Machine Learning Models & Performance Evaluation):** Architecture, hyperparameters, validation scores, and latency benchmarks for the dual-ML pipeline.
-- **Chapter 7 (Proposed System Architecture & Workflow):** Component topologies, event-driven decoupled stream processing (Pattern B), JITAI engine, and composite behavioral risk formulation.
-- **Chapter 8 (Cloud Platform and Services Planning):** Cloud service inventory, deployment topology, comprehensive cost estimations, and portability mapping.
+- **Chapter 5 (Proposed System and Architecture):** System overview, mandatory Cloud Deployment Architecture (Diagram 1), Complete System Architecture / Workflow (Diagram 2), detailed workflows, use cases, and security/availability/scalability analysis.
+- **Chapter 6 (Dataset, Feature Engineering & Machine Learning Models):** In-depth exploration of CDC BRFSS 2015 and WISDM datasets, 30 time-domain feature engineering formulas, dual-ML model performance, and JITAI mathematical formulation.
+- **Chapter 7 (Cloud Platform and Services Planning):** Cloud service inventory, deployment topology, comprehensive cost estimations, and portability mapping.
+- **Chapter 8 (Methodology and Implementation Plan):** Engineering methodology, tools and technologies, step-by-step implementation plan, and evaluation metrics.
 - **Chapter 9 (Implementation / Development):** Implemented modules table, dated configuration screenshots, repository structure, and version control workflow.
 - **Chapter 10 (Results, Verification & Implementation Status):** 26-test automated verification suite, live cloud verification, reliability engineering, and IAM remediation.
 - **Chapter 11 (Conclusion & Future Scope):** Concluding synthesis, Edge TinyML acceleration, and Bedrock conversational AI roadmap.
@@ -236,9 +236,406 @@ The central novelty of this system lies in the architectural coupling of populat
 
 ---
 
-## 5. Dataset and Preprocessing Details
+## 5. Proposed System and Architecture
 
-### 4.1 Dataset 1: CDC BRFSS 2015 (Chronic Disease Risk)
+### 5.1 System Overview
+The Behaviour-Aware Preventive Healthcare Recommendation System is an event-driven, cloud-native platform deployed on Amazon Web Services (AWS) in the Asia Pacific (Mumbai) `ap-south-1` region. The system bridges population-level epidemiological chronic disease risk quantification with high-frequency wearable kinematic sensing, closing the gap between static diagnostic probabilities and context-aware lifestyle behavior modifications.
+
+#### 1. Users and Stakeholders
+- **Individual Users / Patients:** Primary consumers of the system who complete baseline health surveys, wear commercial smartwatches streaming real-time motion data, and receive adaptive Just-In-Time Adaptive Interventions (JITAI) tailored to their instantaneous physical context.
+- **Healthcare Clinicians and Evaluators:** Medical professionals who review longitudinal health risk trajectories, objective sedentary duration logs, and behavioral adherence trends via the dashboard to monitor preventive wellness compliance.
+- **Cloud System Operators:** Engineers overseeing serverless infrastructure, monitoring sub-second execution latencies, ensuring HIPAA/GDPR data isolation, and maintaining database lifecycle policies.
+
+#### 2. System Inputs
+- **Clinical Health Survey Indicators (CDC BRFSS 2015):** 21 standardized epidemiological attributes captured through the web application, including General Health status (`GenHlth`), High Blood Pressure diagnosis (`HighBP`), High Cholesterol diagnosis (`HighChol`), Cholesterol Check history (`CholCheck`), Body Mass Index (`BMI`), Smoking history (`Smoker`), Stroke history (`Stroke`), Heart Disease history (`HeartDiseaseorAttack`), Physical Activity in past 30 days (`PhysActivity`), Fruit/Vegetable intake (`Fruits`, `Veggies`), Heavy Alcohol Consumption (`HvyAlcoholConsump`), Healthcare Access (`AnyHealthcare`, `NoDocbcCost`), Mental/Physical Unhealthy Days (`MentHlth`, `PhysHlth`), Mobility Difficulty (`DiffWalk`), Sex (`Sex`), Age Category (`Age`), Education (`Education`), and Income level (`Income`).
+- **Kinematic Wearable Telemetry (WISDM Dataset):** High-frequency 6-axis Inertial Measurement Unit (IMU) data (tri-axial accelerometer $a_x, a_y, a_z$ and tri-axial gyroscope $g_x, g_y, g_z$) sampled continuously at 20 Hz ($50\text{ ms}$ interval), partitioned into non-overlapping 10-second sliding windows ($N = 200$ readings per window across 6 axes, yielding 1,200 raw data points per window).
+
+#### 3. Core Processing Pipeline
+- **Vectorized Time-Domain Feature Extraction:** Transforms each 200-sample sliding window into 30 statistical descriptors ($\mu, \sigma, \text{Min}, \text{Max}, \text{AvgAbsDiff}$ across 6 sensor axes) in $< 5\text{ ms}$.
+- **Decoupled Stream Orchestration (Pattern B):** Ingestion is fully decoupled from compute by capturing table changes on DynamoDB `activity_events` via **Amazon DynamoDB Streams** (`NEW_IMAGE`), eliminating cold-start backpressure and sensor packet drops.
+- **Dual Machine Learning Inference:**
+  - *Model 1 (XGBoost Classifier):* Evaluates 21 clinical indicators to compute a continuous baseline metabolic disease risk probability $R_{\text{baseline}} \in [0.0, 1.0]$ and categorizes risk into `Low`, `Medium`, or `High` bands.
+  - *Model 2 (Random Forest Classifier):* Evaluates 30 time-domain kinematic features to identify 18 distinct human physical activities with confidence scoring.
+- **Contextual JITAI Synthesis & Composite Behavioral Risk:** Formulates a dynamic Composite Behavioral Risk Index ($R_{\text{composite}}$) that scales baseline risk based on acute uninterrupted sedentary duration versus physical exertion, generating actionable, achievable lifestyle micro-habits.
+
+#### 4. System Outputs
+- **Preventive Risk Stratification:** Instantaneous disease risk score and categorical band displayed on a real-time visual gauge.
+- **Kinematic Activity Recognition Display:** Current physical activity state (e.g., `Walking`, `Jogging`, `Sitting`, `Standing`, `Typing`) with timestamped historical transition logs.
+- **Just-In-Time Adaptive Interventions:** Achievable micro-habit recommendations (e.g., 5-minute brisk walking prompts following prolonged sedentary periods) delivered to the web dashboard.
+- **Automated Database Hygiene:** Automatic 24-hour expiration (`expire_at`) of transient recommendation items via native Amazon DynamoDB Time-To-Live (TTL).
+
+#### 5. Main Architectural Components
+- **Client Presentation Tier:** Responsive React 18 Single-Page Application (SPA) deployed on **AWS Amplify Hosting** and accelerated by **Amazon CloudFront** edge locations.
+- **Security & Ingress Gateway Tier:** **Amazon Cognito User Pool** (`ap-south-1_EtqP8T35c`) for RS256 JWT authentication; **Amazon API Gateway HTTP API v2** (`sofhfh3jm8.execute-api.ap-south-1.amazonaws.com`) with CORS protection; **AWS IoT Core** (`a3sssai20yw40p-ats.iot.ap-south-1.amazonaws.com`) for TLS 1.3 MQTT ingestion.
+- **Serverless Compute Tier:** Four dedicated **AWS Lambda** microservices (`health-adherence-processor`, `health-adherence-profile-handler`, `health-adherence-get-recommendations`, and `health-adherence-ml-engine`) equipped with an optimized **AWS Lambda Layer** (`ml-dependencies-layer`).
+- **NoSQL Persistence & Stream Tier:** Three **Amazon DynamoDB** tables (`profiles`, `activity_events`, `recommendations`) and **DynamoDB Streams**.
+- **Observability Tier:** **Amazon CloudWatch** structured logging with 14-day retention, metric collection, and alarm thresholds.
+
+---
+
+### 5.2 Diagram 1 – Cloud Deployment Architecture (Mandatory)
+
+The deployment architecture is engineered as a cloud-native, decoupled serverless topology deployed exclusively within the **AWS Asia Pacific (Mumbai) `ap-south-1`** region. The diagram below details all utilized AWS services, external client entities, network boundaries, authentication handshakes, compute functions, data persistence stores, and monitoring channels:
+
+```mermaid
+flowchart TD
+    %% 1. External Systems & Clients
+    subgraph Clients ["1. External Clients and Edge Devices"]
+        Browser["User Web Browser / Mobile Device<br>(Patient and Clinician Dashboard)"]
+        Smartwatch["Smartwatch Wearable Device<br>(20 Hz Tri-axial Accel + Gyro)"]
+    end
+
+    %% 2. Ingress & Security Gateway
+    subgraph Ingress ["2. Identity, Edge Hosting and Ingestion (AWS ap-south-1)"]
+        Amplify["AWS Amplify Hosting & CloudFront CDN<br>(main.d13b5qy6zqsapl.amplifyapp.com)"]
+        Cognito["Amazon Cognito User Pool<br>(ID: ap-south-1_EtqP8T35c / RS256 JWT)"]
+        APIGW["Amazon API Gateway HTTP API v2<br>(sofhfh3jm8.execute-api.ap-south-1.amazonaws.com)"]
+        IoTCore["AWS IoT Core MQTT Broker<br>(Topic: health-adherence/telemetry)"]
+    end
+
+    %% 3. Serverless Compute Layer
+    subgraph Compute ["3. Serverless Compute and Dual ML Engine"]
+        LambdaAPI["AWS Lambda: Profile and Query Handlers<br>(health-adherence-profile-handler)"]
+        LambdaIngest["AWS Lambda: Ingestion Processor<br>(health-adherence-processor)"]
+        LambdaML["AWS Lambda: Cloud ML Inference Engine<br>(health-adherence-ml-engine | 1024 MB)"]
+        LayerS3["AWS Lambda Layer & S3 Staging<br>(ml-dependencies-layer / Scikit + XGBoost)"]
+    end
+
+    %% 4. Persistence & Event Streaming
+    subgraph Storage ["4. NoSQL Persistence and Event Decoupling (Amazon DynamoDB)"]
+        TableProfiles[("DynamoDB: profiles<br>(Clinical Survey Baselines)")]
+        TableEvents[("DynamoDB: activity_events<br>(Raw 200-Sample IMU Windows)")]
+        DDBStreams["Amazon DynamoDB Streams<br>(NEW_IMAGE Change Capture)"]
+        TableRecs[("DynamoDB: recommendations<br>(24-Hour TTL on expire_at)")]
+    end
+
+    %% 5. Observability
+    subgraph Observability ["5. Cloud Observability and Governance"]
+        CloudWatch["Amazon CloudWatch<br>(Logs 14-day Retention, Metrics and Alarms)"]
+    end
+
+    %% Connections for Flow A (Web Dashboard & Profile Flow)
+    Browser -->|"1. HTTPS / Load SPA"| Amplify
+    Browser -->|"2. Authenticate"| Cognito
+    Cognito -.->|"3. Issue JWT Token"| Browser
+    Browser -->|"4. REST API Calls (Bearer JWT)"| APIGW
+    APIGW -->|"5. Invoke"| LambdaAPI
+    LambdaAPI -->|"6a. Read / Write Profile"| TableProfiles
+    LambdaAPI -->|"6b. Query Active Recs"| TableRecs
+
+    %% Connections for Flow B (Smartwatch Telemetry Ingestion)
+    Smartwatch -->|"1. MQTT over TLS 1.3 (X.509)"| IoTCore
+    IoTCore -->|"2. Rule Trigger"| LambdaIngest
+    LambdaIngest -->|"3. Insert Record (status: received)"| TableEvents
+
+    %% Connections for Flow C (Decoupled Stream ML Inference - Pattern B)
+    TableEvents -->|"4. Change Data Capture"| DDBStreams
+    DDBStreams -->|"5. Asynchronous Event Batch"| LambdaML
+    LayerS3 -.->|"Mounted ML Binaries"| LambdaML
+    LambdaML -->|"6. Read Clinical Baseline"| TableProfiles
+    LambdaML -->|"7. Persist JITAI Rec + 24h TTL"| TableRecs
+    LambdaML -->|"8. Update status: processed"| TableEvents
+
+    %% Observability Connections
+    LambdaIngest -.->|"Telemetry Logs"| CloudWatch
+    LambdaML -.->|"Inference Metrics"| CloudWatch
+    LambdaAPI -.->|"Access Logs"| CloudWatch
+```
+
+**Figure 1. Cloud Deployment Architecture.**
+
+#### Component-by-Component Description
+
+1. **Client & Edge Device Tier:**
+   - **User Web Browser / Mobile Device:** Acts as the presentation interface for patients and clinicians. Renders the responsive Single-Page Application (SPA) built with React 18 and Tailwind CSS, providing real-time data visualization, clinical survey forms, and recommendation cards.
+   - **Smartwatch Wearable Device (`iot_simulator/watch_simulator.py`):** Captures high-frequency 6-axis IMU sensor streams (tri-axial accelerometer and tri-axial gyroscope) at 20 Hz ($50\text{ ms}$ intervals). Readings are aggregated into non-overlapping 10-second sliding windows ($N = 200$ samples) and transmitted to the cloud.
+
+2. **Security, Identity & Edge Ingress Tier (AWS `ap-south-1`):**
+   - **AWS Amplify Hosting & Amazon CloudFront CDN:** Deploys and serves the static production build (`https://main.d13b5qy6zqsapl.amplifyapp.com`) with automated CI/CD directly from GitHub (`main` branch). Global CloudFront edge points of presence provide sub-second asset delivery, automatic SSL termination, and DDoS protection via AWS Shield Standard.
+   - **Amazon Cognito User Pool (`ap-south-1_EtqP8T35c`):** Serves as the centralized Identity Provider (IdP). Manages user registration, email verification, SHA-256 password hashing, and role-based access control (RBAC). Upon successful login (Client ID: `40g81o4ckv79e3h884k667g2l9`), Cognito issues RS256-signed JSON Web Tokens (ID Token, Access Token, Refresh Token) with a 1-hour validity window.
+   - **Amazon API Gateway HTTP API v2 (`sofhfh3jm8.execute-api.ap-south-1.amazonaws.com`):** Serves as the low-latency RESTful API gateway. Enforces CORS preflight whitelisting (`GET`, `POST`, `OPTIONS`) restricted to the Amplify origin domain, validates incoming Bearer JWT tokens via a native Cognito Authorizer, and proxies authorized calls to backend Lambda microservices.
+   - **AWS IoT Core (`a3sssai20yw40p-ats.iot.ap-south-1.amazonaws.com`):** Managed enterprise MQTT message broker operating over TLS 1.3 with X.509 mutual certificate authentication. Ingests 20 Hz smartwatch telemetry on topic `health-adherence/telemetry`. An IoT Topic Rule (`HealthAdherenceIngestRule`) routes parsed JSON payloads to Lambda.
+
+3. **Serverless Compute & Dual ML Inference Tier:**
+   - **`health-adherence-processor` (AWS Lambda):** Lightweight ingestion microservice (128 MB RAM, 10-second timeout) triggered by IoT Core. Validates incoming payload schemas, generates unique UUID `event_id` keys, and persists records into DynamoDB `activity_events` with `status: "received"`.
+   - **`health-adherence-profile-handler` & `get-recommendations` (AWS Lambda):** REST microservices (256 MB RAM, 15-second timeout) triggered by API Gateway. Provide CRUD operations on user clinical profiles and query non-expired active recommendations for dashboard presentation.
+   - **`health-adherence-ml-engine` (AWS Lambda):** High-performance serverless machine learning inference engine (1024 MB RAM, 60-second timeout) triggered asynchronously by DynamoDB Streams. Executes feature extraction, dual-model inference, JITAI synthesis, and composite risk scoring in $< 20\text{ ms}$.
+   - **AWS Lambda Layer (`ml-dependencies-layer`) & Amazon S3 (`health-adherence-ml-staging-751605536502`):** Custom Lambda Layer containing pre-compiled Scikit-Learn 1.4.2, XGBoost 2.0.3, NumPy 1.26.4, and SciPy 1.13.0 binaries (105.55 MB compressed, 243.42 MB uncompressed — strictly adhering to the AWS Lambda 250 MB uncompressed limit). Due to AWS CLI direct upload limits (50 MB), the layer artifact is staged in a dedicated S3 bucket before publication.
+
+4. **Persistence & Event Decoupling Tier (Amazon DynamoDB):**
+   - **`profiles` Table:** Managed NoSQL table storing user health indicators, demographics, and calibrated baseline risk scores. Partition Key: `user_id` (String). Operates in On-Demand (Pay-Per-Request) capacity mode.
+   - **`activity_events` Table:** High-throughput time-series table storing raw 200-reading sensor windows, feature summaries, and execution statuses. Partition Key: `event_id` (String).
+   - **Amazon DynamoDB Streams (`NEW_IMAGE`):** Real-time Change Data Capture (CDC) stream enabled on `activity_events`. Captures newly inserted sensor batches and triggers `health-adherence-ml-engine` asynchronously in batches of 1 to 5 records.
+   - **`recommendations` Table:** Stores generated JITAI micro-interventions, confidence scores, and dynamic Composite Behavioral Risk values. Partition Key: `recommendation_id` (String). Equipped with native **Time-To-Live (TTL)** enabled on attribute `expire_at` (Unix epoch + 24 hours), causing expired records to be purged automatically by AWS at zero cost without consuming provisioned throughput.
+
+5. **Observability & Cloud Governance Tier:**
+   - **Amazon CloudWatch:** Unified logging and monitoring plane. CloudWatch Log Groups collect structured stdout/stderr streams from all Lambda functions with an enforced **14-day log retention policy** to prevent storage bloat. CloudWatch Metrics tracks invocation counts, duration, throttle events, and DynamoDB consumed read/write capacity units.
+
+#### End-to-End Data Flow
+
+- **Flow A: User Onboarding and Clinical Profile Management:**
+  1. The user accesses the web application via HTTPS through Amazon CloudFront CDN from AWS Amplify (`https://main.d13b5qy6zqsapl.amplifyapp.com`).
+  2. The user registers or signs in using their credentials against Amazon Cognito User Pool (`ap-south-1_EtqP8T35c`).
+  3. Cognito validates credentials and issues an RS256-signed JWT Access Token back to the browser client.
+  4. The user completes the 21-indicator clinical assessment form on the dashboard. The client sends an authorized HTTP POST request to API Gateway (`sofhfh3jm8`) with the Bearer JWT token in the `Authorization` header.
+  5. API Gateway validates the JWT token against Cognito and proxies the request to `health-adherence-profile-handler` Lambda.
+  6. The Lambda writes the clinical record to DynamoDB `profiles` and evaluates the initial epidemiological disease risk score via the XGBoost model.
+
+- **Flow B: Smartwatch Telemetry Ingestion:**
+  1. The smartwatch collects continuous 20 Hz 6-axis IMU readings (200 readings per 10-second window) and publishes an MQTT payload over TLS 1.3 to AWS IoT Core topic `health-adherence/telemetry`.
+  2. AWS IoT Core Topic Rule evaluates the message and routes it to `health-adherence-processor` Lambda.
+  3. The Lambda validates payload integrity and writes the raw record to DynamoDB `activity_events` with `status: "received"`.
+
+- **Flow C: Decoupled Stream Processing and Dual ML Inference (Pattern B):**
+  1. The write operation on `activity_events` generates an `INSERT` event in Amazon DynamoDB Streams with the `NEW_IMAGE` view.
+  2. DynamoDB Streams triggers `health-adherence-ml-engine` asynchronously.
+  3. The ML Lambda unpacks the 200 raw accelerometer and gyroscope readings and extracts 30 statistical time-domain features ($\mu, \sigma, \text{Min}, \text{Max}, \text{AvgAbsDiff}$).
+  4. The Lambda executes the Random Forest HAR model to classify the physical activity and confidence score.
+  5. The Lambda queries the user's clinical baseline from DynamoDB `profiles` and evaluates the XGBoost disease risk model.
+  6. The JITAI engine correlates the acute activity state (e.g., `Sitting` for $> 30\text{ min}$) with chronic risk, computes the dynamic Composite Behavioral Risk ($R_{\text{composite}}$), and synthesizes a tailored lifestyle recommendation.
+  7. The recommendation is written to DynamoDB `recommendations` with the native 24-hour Unix epoch attribute `"expire_at": int(time.time()) + 86400`.
+  8. The source record in `activity_events` is updated to `status: "processed"`.
+
+- **Flow D: Recommendation Delivery and Database Hygiene:**
+  1. The React dashboard periodically polls API Gateway endpoint `/recommendations`.
+  2. `health-adherence-get-recommendations` Lambda queries DynamoDB `recommendations` for active items matching the user's ID.
+  3. Active recommendations, the current recognized activity, and the dynamic risk gauge are rendered on the UI.
+  4. After 24 hours, AWS DynamoDB's internal TTL background sweeper purges expired recommendation items automatically, guaranteeing zero unindexed scan latency and zero storage cost.
+
+---
+
+### 5.3 Diagram 2 – Complete System Architecture / Workflow (Mandatory)
+
+The complete end-to-end system architecture and data processing workflow illustrates how heterogeneous clinical and sensor inputs are transformed into personalized, behavior-aware healthcare recommendations through a closed-loop multi-tiered pipeline:
+
+```mermaid
+flowchart LR
+    %% Column 1: Users & Inputs
+    subgraph Inputs ["1. Users and Input Sources"]
+        User["End-User / Patient"]
+        Clinician["Healthcare Evaluator"]
+        SurveyData["Clinical Survey Data<br>(21 CDC BRFSS Indicators)"]
+        SensorData["Smartwatch IMU Telemetry<br>(20 Hz Accel + Gyro)"]
+    end
+
+    %% Column 2: Ingress Layer
+    subgraph IngressLayer ["2. Client and Ingress Gateway"]
+        ReactApp["React 18 Dashboard SPA<br>(AWS Amplify Hosting)"]
+        CognitoAuth["Amazon Cognito<br>(RS256 JWT Authorizer)"]
+        APIGateway["API Gateway HTTP API v2<br>(CORS Whitelisting)"]
+        IoTIngest["AWS IoT Core Broker<br>(MQTT / TLS 1.3)"]
+    end
+
+    %% Column 3: Storage Layer
+    subgraph StorageLayer ["3. Decoupled Persistence Layer"]
+        DBProfiles[("DynamoDB: profiles<br>(Clinical Baselines)")]
+        DBEvents[("DynamoDB: activity_events<br>(Raw Sensor Windows)")]
+        DDBStream["DynamoDB Streams<br>(Asynchronous Change Queue)"]
+    end
+
+    %% Column 4: Analytics Engine
+    subgraph ProcessingLayer ["4. Backend Logic and Dual ML Analytics"]
+        FeatureEngine["Feature Extraction Engine<br>(30 Time-Domain Metrics)"]
+        ModelRF["Random Forest HAR Model<br>(96.5% Acc / 18 Classes)"]
+        ModelXGB["XGBoost Risk Model<br>(86.2% Acc / 0.84 AUC-ROC)"]
+        JITAIEngine["JITAI Synthesis Engine<br>(Composite Risk: R_composite)"]
+    end
+
+    %% Column 5: Outputs & Monitoring
+    subgraph OutputLayer ["5. Outputs, Feedback and Observability"]
+        DBRecs[("DynamoDB: recommendations<br>(24h TTL Auto-Purge)")]
+        RiskUI["Preventive Risk Gauge<br>(Low / Medium / High Band)"]
+        ActivityUI["Live Activity State Display<br>(Sedentary vs Active)"]
+        RecUI["JITAI Micro-Habit Alerts<br>(Context-Aware Coaching)"]
+        FeedbackLoop["Closed-Loop Adherence Tracking<br>(Behavioral Verification)"]
+        CloudWatchObs["Amazon CloudWatch<br>(Audit Trail and Metrics)"]
+    end
+
+    %% Connections
+    User -->|"Completes Assessment"| SurveyData
+    User -->|"Wears Smartwatch"| SensorData
+    Clinician -->|"Reviews Risk Trends"| ReactApp
+
+    SurveyData --> ReactApp
+    ReactApp -->|"Authenticate"| CognitoAuth
+    ReactApp -->|"Save Profile / Fetch Recs"| APIGateway
+    APIGateway --> DBProfiles
+
+    SensorData -->|"Stream Telemetry"| IoTIngest
+    IoTIngest --> DBEvents
+    DBEvents --> DDBStream
+    DDBStream --> FeatureEngine
+
+    FeatureEngine -->|"30 Kinematic Features"| ModelRF
+    DBProfiles -->|"Clinical Baseline"| ModelXGB
+
+    ModelXGB -->|"Baseline Risk R_base"| JITAIEngine
+    ModelRF -->|"Activity State and Duration"| JITAIEngine
+
+    JITAIEngine -->|"Write Rec + 24h TTL"| DBRecs
+    DBRecs -->|"Active Recs"| APIGateway
+    APIGateway --> ReactApp
+
+    ReactApp --> RiskUI
+    ReactApp --> ActivityUI
+    ReactApp --> RecUI
+
+    SensorData -.->|"Detects Action Post-Intervention"| FeedbackLoop
+    FeedbackLoop -.->|"Updates Adherence Score"| DBProfiles
+
+    JITAIEngine -.->|"Execution Metrics"| CloudWatchObs
+```
+
+**Figure 2. Complete System Architecture / Workflow.**
+
+#### End-to-End System Workflow: From Input to Output
+
+The movement of data through the complete system is partitioned into seven sequential and self-reinforcing phases:
+
+1. **Phase 1: Multi-Modal Input Acquisition:**
+   - *Subjective Intake:* The user logs into the web application and submits responses to 21 lifestyle and clinical questions derived from the CDC BRFSS 2015 protocol (e.g., self-reported general health, blood pressure status, physical activity frequency, BMI, and age).
+   - *Objective Kinematic Capture:* The user wears an IoT smartwatch. The onboard tri-axial accelerometer and gyroscope continuously measure spatial accelerations and angular velocities at 20 Hz ($50\text{ ms}$ sample interval), capturing both static gravitational vectors (posture) and high-frequency kinetic movements.
+
+2. **Phase 2: Ingress, Security Gateway & Edge Decoupling:**
+   - Clinical survey data is submitted over HTTPS with RS256 Bearer JWT tokens to Amazon API Gateway HTTP API v2 (`sofhfh3jm8`), which enforces strict CORS whitelisting and validates token claims against Amazon Cognito User Pool (`ap-south-1_EtqP8T35c`). Validated records are committed directly to DynamoDB `profiles`.
+   - Sensor telemetry is batched into 10-second non-overlapping sliding windows ($N = 200$ readings) and published to AWS IoT Core over MQTT with TLS 1.3 and mutual X.509 certificate authentication. AWS IoT Core routes the payload to DynamoDB `activity_events` with initial status `received`.
+   - **Architectural Event Decoupling (Pattern B):** Ingestion is completely isolated from machine learning computation. Sensor streams are never delayed by model execution or cold-start overheads, guaranteeing zero dropped packets.
+
+3. **Phase 3: Kinematic Windowing & Feature Engineering:**
+   - Insertion of a new record in `activity_events` triggers Amazon DynamoDB Streams (`NEW_IMAGE`), which asynchronously dispatches an event batch to `health-adherence-ml-engine` AWS Lambda.
+   - The Lambda unpacks the 200 readings ($6\text{ axes} \times 200 = 1,200\text{ values}$) and executes a vectorized feature extraction algorithm in $< 5\text{ ms}$ to compute 30 statistical time-domain descriptors:
+     - Arithmetic Mean ($\mu_k$): Captures gravitational orientation and resting posture.
+     - Standard Deviation ($\sigma_k$): Quantifies instantaneous kinematic energy and kinetic movement intensity.
+     - Minimum ($\text{Min}_k$) and Maximum ($\text{Max}_k$): Establishes dynamic range bounds across physical axes.
+     - Average Absolute Difference ($\text{AvgAbsDiff}_k$): Measures the high-frequency jerk and rate of change of motion.
+
+4. **Phase 4: Dual Machine Learning Analytics:**
+   - *Kinematic Activity Classification (Random Forest):* The 30 extracted features are passed to a pre-trained Random Forest classifier (200 decision trees) loaded with module-level caching. The model predicts the user's instantaneous physical activity across 18 distinct human activity classes (e.g., `Walking`, `Jogging`, `Sitting`, `Standing`, `Typing`, `Eating_Sandwich`) with a classification confidence score in $< 2\text{ ms}$.
+   - *Epidemiological Risk Quantification (XGBoost):* The engine fetches the user's 21 clinical survey attributes from DynamoDB `profiles` and evaluates the pre-trained XGBoost model. The model computes a continuous disease risk probability $R_{\text{baseline}} \in [0.0, 1.0]$ and categorizes the user into a risk tier: `Low Risk` ($p < 0.35$), `Medium Risk` ($0.35 \le p < 0.65$), or `High Risk` ($p \ge 0.65$) in $< 3\text{ ms}$.
+
+5. **Phase 5: JITAI Contextual Synthesis & Dynamic Risk Modulation:**
+   - The Just-In-Time Adaptive Intervention (JITAI) engine correlates the acute physical state with the long-term clinical risk tier.
+   - The engine computes the **Composite Behavioral Risk Index** ($R_{\text{composite}}$):
+     $$R_{\text{composite}}(t) = R_{\text{baseline}} \times \left(1 + \alpha \cdot \frac{T_{\text{sedentary}}(t)}{180} - \gamma \cdot \frac{T_{\text{active}}(t)}{60}\right)$$
+   - *Contextual Decision Rules:*
+     - If the user has `Medium` or `High` risk and is classified in a `Sitting` state exceeding 30 continuous minutes ($T_{\text{sedentary}} \ge 30$), the system triggers a **Sedentary Interception Micro-Nudge**: *"Prolonged sitting detected. A 5-minute brisk walk will stimulate GLUT-4 translocation and reduce postprandial glucose surges."*
+     - If the user is classified in `Walking` or `Jogging`, the system triggers **Active Reinforcement Coaching**: *"Excellent active pacing! You have achieved 45 minutes of moderate aerobic exertion toward your weekly 150-minute cardio goal."*
+
+6. **Phase 6: Multi-Tenant Persistence, TTL Management & Client Presentation:**
+   - The generated recommendation is written into DynamoDB `recommendations` with partition key `recommendation_id`, along with the user's composite risk, activity state, and the native 24-hour Unix epoch attribute `"expire_at": int(time.time()) + 86400`.
+   - The raw activity event status in `activity_events` is updated to `status: "processed"`.
+   - The React 18 SPA queries API Gateway and dynamically renders the updated risk gauge, recognized activity badge, and active JITAI recommendation cards.
+   - After 24 hours, DynamoDB's native TTL engine automatically purges obsolete recommendations in the background without incurring read/write capacity charges or database table locks.
+
+7. **Phase 7: Closed-Loop Behavioral Adherence Feedback & Monitoring:**
+   - Subsequent 10-second smartwatch telemetry windows are evaluated to verify whether the user performed the suggested action (e.g., transitioning from `Sitting` to `Walking` within 15 minutes of a sedentary alert).
+   - Compliance or non-compliance is recorded to update the user's historical adherence score in DynamoDB `profiles`.
+   - Concurrently, all execution steps emit structured JSON logs to Amazon CloudWatch, allowing operations and clinicians to audit system performance, latency percentiles (p95 $< 180\text{ ms}$), and algorithmic reliability.
+
+---
+
+### 5.4 Workflow and Use Cases
+
+#### 1. Numbered Operational Execution Sequence
+1. **User Authentication:** User navigates to `https://main.d13b5qy6zqsapl.amplifyapp.com`, enters credentials, and receives RS256 JWT tokens from Amazon Cognito User Pool `ap-south-1_EtqP8T35c`.
+2. **Clinical Baseline Survey:** User completes the 21-question health survey; client sends an authorized HTTP POST request to API Gateway (`sofhfh3jm8`), writing records to DynamoDB `profiles`.
+3. **Continuous Sensor Streaming:** Smartwatch wearable initiates 20 Hz IMU telemetry collection, batching 200 readings per 10-second sliding window, and publishes MQTT packets over TLS 1.3 to AWS IoT Core topic `health-adherence/telemetry`.
+4. **Ingestion & Buffering:** AWS IoT Core triggers `health-adherence-processor` Lambda, inserting raw events into DynamoDB `activity_events` with `status: "received"`.
+5. **Decoupled Stream Trigger (Pattern B):** DynamoDB Streams detects the new item and dispatches an asynchronous event batch (`NEW_IMAGE`) to `health-adherence-ml-engine` Lambda.
+6. **Feature Extraction & Dual Inference:** ML Lambda computes 30 statistical time-domain features, queries the clinical baseline from DynamoDB `profiles`, and executes the cached Random Forest HAR and XGBoost risk models in $< 10\text{ ms}$.
+7. **JITAI Recommendation Generation:** The JITAI synthesis engine calculates dynamic Composite Behavioral Risk ($R_{\text{composite}}$) and writes contextual lifestyle nudges to DynamoDB `recommendations` with 24-hour TTL (`expire_at`).
+8. **Dashboard Presentation & Closed-Loop Tracking:** The React SPA updates the risk gauge and recommendation feed via API Gateway; subsequent sensor batches track whether the user performed the recommended micro-habit, updating the longitudinal adherence log.
+
+#### 2. Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Patient / User
+    participant Watch as Smartwatch (20 Hz IMU)
+    participant IoTCore as AWS IoT Core
+    participant ProcLambda as Lambda: Ingest Processor
+    participant DDBEvents as DynamoDB: activity_events
+    participant DDBStream as DynamoDB Streams
+    participant MLLambda as Lambda: Cloud ML Engine
+    participant DDBProfiles as DynamoDB: profiles
+    participant DDBRecs as DynamoDB: recommendations
+    participant APIGW as Amazon API Gateway
+    participant Dashboard as React 18 Web Dashboard
+
+    User->>Dashboard: 1. Login (Cognito) & Fill Clinical Survey
+    Dashboard->>APIGW: 2. POST /profile (Bearer JWT)
+    APIGW->>DDBProfiles: 3. Commit 21 Clinical Indicators
+    Watch->>IoTCore: 4. Publish 10s Sensor Window (MQTT / TLS 1.3)
+    IoTCore->>ProcLambda: 5. Route Payload
+    ProcLambda->>DDBEvents: 6. PutItem (status: received)
+    DDBEvents-->>DDBStream: 7. Emit NEW_IMAGE Stream Event
+    DDBStream->>MLLambda: 8. Invoke Asynchronously (Batch 1-5)
+    MLLambda->>MLLambda: 9. Extract 30 Time-Domain Features
+    MLLambda->>DDBProfiles: 10. GetItem (Clinical Baseline)
+    MLLambda->>MLLambda: 11. Dual ML Inference (XGBoost + RF)
+    MLLambda->>MLLambda: 12. Evaluate Composite Risk & JITAI Logic
+    MLLambda->>DDBRecs: 13. PutItem (Rec + 24h TTL expire_at)
+    MLLambda->>DDBEvents: 14. UpdateItem (status: processed)
+    Dashboard->>APIGW: 15. GET /recommendations (Polling)
+    APIGW->>DDBRecs: 16. Query Active Non-Expired Items
+    DDBRecs-->>Dashboard: 17. Return JITAI Recs + Risk Band
+    Dashboard-->>User: 18. Render Contextual Lifestyle Intervention
+    Watch-->>MLLambda: 19. Subsequent Sensor Window Verifies Execution (Closed-Loop)
+```
+
+#### 3. Primary System Use Cases
+- **Use Case 1: Sedentary Interception for High Metabolic Risk Patient**
+  - *Actor:* Sedentary Desk Worker with diagnosed pre-diabetes (`GenHlth=4`, `BMI=32`, `HighBP=1`, `Age=8`).
+  - *Trigger:* Continuous 20 Hz smartwatch telemetry classifies the user in `Sitting` posture for $> 30$ consecutive minutes ($T_{\text{sedentary}} = 35$).
+  - *Processing:* XGBoost baseline risk is evaluated at $0.68$ (`High Risk`). Dynamic Composite Risk calculator applies the sedentary vulnerability penalty:
+    $$R_{\text{composite}} = 0.68 \times \left(1 + 0.20 \cdot \frac{35}{180}\right) = 0.706$$
+  - *Outcome:* The JITAI engine issues an urgent, achievable micro-break prompt: *"Sedentary duration exceeded 30 minutes. Stand up and complete a 5-minute indoor walking lap to improve glycemic uptake and stimulate muscle glucose transport."*
+- **Use Case 2: Positive Behavioral Reinforcement & Cardio Pacing**
+  - *Actor:* Individual with moderate cardiovascular risk engaging in physical exercise.
+  - *Trigger:* Smartwatch telemetry exhibits high kinetic variance ($\sigma > 7.5\text{ m/s}^2$) and periodic vertical peaks ($1.8\text{ Hz}$), classified as `Walking` or `Jogging` for 45 minutes ($T_{\text{active}} = 45$).
+  - *Processing:* Baseline risk $0.42$ (`Medium Risk`) receives the physical activity protective reward:
+    $$R_{\text{composite}} = 0.42 \times \left(1 - 0.15 \cdot \frac{45}{60}\right) = 0.373$$
+  - *Outcome:* The JITAI engine outputs positive motivational reinforcement: *"Outstanding cardiovascular pacing! You have completed 45 minutes of active exercise, reducing your composite metabolic risk score."*
+- **Use Case 3: Dynamic Clinical Survey Recalibration**
+  - *Actor:* User modifying their lifestyle habits over a multi-week period (e.g., smoking cessation, weight reduction, increased weekly exercise).
+  - *Trigger:* User updates their health indicators in the React 18 profile tab.
+  - *Processing:* API Gateway routes the updated payload to `health-adherence-profile-handler`, which recalculates the baseline XGBoost disease risk and persists the updated model weights into DynamoDB `profiles`.
+  - *Outcome:* Subsequent real-time JITAI recommendations immediately adjust their threshold sensitivity to reflect the user's improved clinical baseline.
+
+---
+
+### 5.5 Security, Availability and Scalability
+
+#### 1. Access Control & Principle of Least Privilege
+The architecture strictly enforces the principle of least privilege using AWS Identity and Access Management (IAM):
+- **Lambda Execution Roles:** Each microservice assumes a dedicated execution role. `health-adherence-ml-engine` is granted read permissions exclusively to `activity_events` streams and `profiles`, write permissions to `recommendations`, and update permissions on `activity_events`. Broad wildcard permissions (`"Resource": "*"`) are strictly forbidden.
+- **Role-Based Access Control (RBAC):** Amazon Cognito groups (`Admins`, `Patients`, `Clinicians`) govern route-level access on API Gateway. Clinicians are permitted to view aggregated cross-patient risk summaries, while patients are restricted to accessing their own profile and recommendations via partition key isolation (`user_id`).
+
+#### 2. Authentication & Credential Governance
+- **Zero Secrets in Code:** No AWS credentials, access keys, or secret tokens exist within application source code or Git repositories.
+- **RS256 JWT Authentication:** All REST interactions require a Bearer token issued by Amazon Cognito. API Gateway verifies the cryptographic signature against Cognito's JSON Web Key Set (JWKS) before request routing.
+- **Mutual TLS for Wearable Ingestion:** Smartwatch edge devices authenticate to AWS IoT Core over port 8883 using unique 2048-bit RSA X.509 private keys and client certificates stored securely in hardware keystores.
+
+#### 3. Data Encryption in Transit and at Rest
+- **In-Transit Encryption:** All communications across public networks strictly enforce TLS 1.3 encryption (HTTPS for REST API and Amplify dashboard; MQTTS for IoT Core telemetry). Insecure HTTP/MQTT endpoints are rejected at the edge.
+- **At-Rest Encryption:** All data persisted in Amazon DynamoDB (`profiles`, `activity_events`, `recommendations`) and Amazon S3 staging buckets is encrypted by default using 256-bit Advanced Encryption Standard (AES-256) backed by AWS Key Management Service (AWS KMS).
+
+#### 4. High Availability & Fault Tolerance
+- **Multi-AZ Serverless Infrastructure:** All underlying AWS managed services (Amplify, Cognito, API Gateway, IoT Core, Lambda, DynamoDB) execute redundantly across multiple Availability Zones in the `ap-south-1` (Mumbai) region, guaranteeing 99.99% service availability.
+- **Decoupled Queue Buffering (Pattern B):** DynamoDB Streams acts as a durable, distributed buffer between ingestion and ML compute. Telemetry spikes are buffered without packet loss, and failed Lambda invocations are retried automatically up to 2 times before routing to a Dead-Letter Queue (DLQ).
+- **Development Fallback Resilience:** In local development environments without cloud deployment permissions, `backend/runners/stream_runner.py` provides identical decoupled event polling and inference logic against live DynamoDB tables.
+
+#### 5. Scalability & Cost Optimization
+- **Elastic Auto-Scaling:** AWS Lambda scales horizontally and elastically from 0 to thousands of concurrent executions in response to streaming event volume. Amazon DynamoDB operates in On-Demand (Pay-Per-Request) mode, handling unexpected traffic bursts with zero manual capacity provisioning.
+- **Automated Database Hygiene (24-Hour TTL):** Transient recommendation items are stamped with `"expire_at": int(time.time()) + 86400`. Amazon DynamoDB automatically purges expired items in the background at zero cost, eliminating unindexed scan latency, preventing unbounded table storage growth, and avoiding HTTP 500 gateway timeouts.
+- **Zero Idle Operational Spend:** The entire prototype operates within the AWS Free Tier ($0.00/month spend), scaling linearly to just $23.20/month for a production cohort of 10,000 monthly active users ($0.0023/user/month).
+
+---
+
+## 6. Dataset, Feature Engineering and Machine Learning Models
+
+### 6.1 Dataset 1: CDC BRFSS 2015 (Chronic Disease Risk)
 * **Origin:** Centers for Disease Control and Prevention (CDC) – Behavioral Risk Factor Surveillance System.
 * **Volume:** 253,680 survey records across 50 US states. A balanced cohort of 70,692 records (50% non-diabetic, 50% pre-diabetic/diabetic) was employed to prevent majority-class bias.
 * **Target Feature:** `Diabetes_binary` ($0$ = Non-diabetic, $1$ = Diabetic / Pre-diabetic).
@@ -265,7 +662,7 @@ The central novelty of this system lies in the architectural coupling of populat
   20. `Education`: Education level ($1$ = Never attended to $6$ = College graduate).
   21. `Income`: Income scale ($1 = <\$10,000$ to $8 = \ge\$75,000$).
 
-### 4.2 Dataset 2: WISDM Smartwatch & Smartphone Sensor Dataset
+### 6.2 Dataset 2: WISDM Smartwatch & Smartphone Sensor Dataset
 * **Origin:** Wireless Sensor Data Mining (WISDM) Laboratory, Fordham University / UCI Machine Learning Repository.
 * **Sensory Channels:** Tri-axial Accelerometer ($a_x, a_y, a_z$) and Tri-axial Gyroscope ($g_x, g_y, g_z$).
 * **Sampling Rate & Windowing:** Sampled at 20 Hz ($50\text{ ms}$ interval). Raw time-series are partitioned into **10-second non-overlapping sliding windows** resulting in exactly $N = 200$ readings per window across all 6 channels ($1,200$ raw floating-point data points per window).
@@ -276,7 +673,7 @@ The central novelty of this system lies in the architectural coupling of populat
   - *Nutrition & Ingestion:* Drinking from Cup, Eating Soup, Eating Pasta, Eating Sandwich, Eating Chips.
   - *Athletic Activities:* Catching Ball, Dribbling Basketball, Kicking Soccer Ball.
 
-### 4.3 Feature Engineering: 30 Time-Domain Statistical Metrics
+### 6.3 Feature Engineering: 30 Time-Domain Statistical Metrics
 To compress high-frequency noise into robust kinematic descriptors suitable for real-time cloud inference, 5 statistical metrics are calculated across each of the 6 sensor axes ($6 \times 5 = 30\text{ features}$):
 
 $$\mu_k = \frac{1}{N}\sum_{i=1}^N x_{k,i} \quad (\text{Arithmetic Mean})$$
@@ -289,11 +686,7 @@ $$\text{AvgAbsDiff}_k = \frac{1}{N-1}\sum_{i=1}^{N-1} |x_{k,i+1} - x_{k,i}| \qua
 
 Where $k \in \{a_x, a_y, a_z, g_x, g_y, g_z\}$ and $N = 200$. These 30 features capture both postural orientation (mean acceleration due to gravity) and kinetic movement volatility (standard deviation and absolute difference).
 
----
-
-## 5. Machine Learning Models and Performance Evaluation
-
-### 5.1 Model 1: Preventive Disease Risk Prediction (XGBoost)
+### 6.4 Model 1: Preventive Disease Risk Prediction (XGBoost)
 * **Architecture:** Extreme Gradient Boosting (`XGBClassifier`) optimized using tree-based regularization to handle non-linear epidemiological interactions.
 * **Hyperparameters:** `n_estimators=300`, `max_depth=5`, `learning_rate=0.05`, `subsample=0.8`, `colsample_bytree=0.8`, `eval_metric='logloss'`.
 * **Validation Performance:**
@@ -309,12 +702,12 @@ Where $k \in \{a_x, a_y, a_z, g_x, g_y, g_z\}$ and $N = 200$. These 30 features 
 
 ```
 Risk Stratification Thresholds:
-  • Low Risk    : p < 0.35      ➔ Lifestyle maintenance & aerobic consistency
-  • Medium Risk : 0.35 ≤ p < 0.65 ➔ Targeted cardiovascular nudges & sedentary interception
-  • High Risk   : p ≥ 0.65      ➔ Clinical consultation advisory & low-impact activity
+  • Low Risk    : p < 0.35        -> Lifestyle maintenance & aerobic consistency
+  • Medium Risk : 0.35 <= p < 0.65 -> Targeted cardiovascular nudges & sedentary interception
+  • High Risk   : p >= 0.65       -> Clinical consultation advisory & low-impact activity
 ```
 
-### 5.2 Model 2: Kinematic Human Activity Recognition (Random Forest)
+### 6.5 Model 2: Kinematic Human Activity Recognition (Random Forest)
 * **Architecture:** `RandomForestClassifier` with 200 unpruned decision trees utilizing the Gini impurity splitting criterion.
 * **Performance Overview:**
   - **Overall Accuracy:** **96.5%**
@@ -331,76 +724,15 @@ Risk Stratification Thresholds:
 | **Typing** | 0.96 | 0.97 | 0.96 | High-frequency, low-amplitude wrist gyro oscillations. |
 | **Eating (Meals)**| 0.93 | 0.94 | 0.93 | Repetitive roll/pitch cycles corresponding to hand-to-mouth motion. |
 
-### 5.3 Latency & Operational Benchmarks
+### 6.6 Latency & Operational Benchmarks
 Inference latency was rigorously profiled on AWS Lambda (Python 3.12 runtime, 1024 MB RAM):
 - **Feature Extraction (30 metrics from 200 readings):** $3.82\text{ ms}$
 - **Random Forest HAR Inference:** $1.94\text{ ms}$
 - **XGBoost Disease Risk Inference:** $2.38\text{ ms}$
 - **Total In-Memory Processing Time:** **$< 10\text{ milliseconds}$** per event.
-- **End-to-End Cloud Latency (MQTT Ingestion $\rightarrow$ Streams $\rightarrow$ Lambda $\rightarrow$ DynamoDB):** **$< 180\text{ milliseconds}$**, easily meeting sub-second clinical alerting thresholds.
+- **End-to-End Cloud Latency (MQTT Ingestion -> Streams -> Lambda -> DynamoDB):** **$< 180\text{ milliseconds}$**, easily meeting sub-second clinical alerting thresholds.
 
----
-
-## 6. Proposed System Architecture & Workflow
-
-### 6.1 Architectural Topology
-The system is constructed as a modern, decoupled serverless architecture deployed in the AWS Asia Pacific (Mumbai) `ap-south-1` region:
-
-```mermaid
-flowchart TD
-    subgraph ClientLayer ["1. Edge & Client Layer"]
-        WatchSim["Smartwatch Telemetry Simulator\n(WISDM 20Hz Accel + Gyro)"]
-        SPA["React 18 + Vite Web Dashboard\n(AWS Amplify Hosting / CloudFront)"]
-    end
-
-    subgraph IngestionLayer ["2. Ingestion & Security Layer"]
-        IoTCore["AWS IoT Core (MQTT / TLS 1.3)\nTopic: health-adherence/telemetry"]
-        Cognito["Amazon Cognito User Pool\nJWT Authentication & RBAC"]
-        APIGW["Amazon API Gateway (HTTP API v2)\nCORS & Preflight Handling"]
-    end
-
-    subgraph ProcessingLayer ["3. Decoupled Compute & ML Layer"]
-        LambdaIngest["AWS Lambda: Processor\n(Ingests Raw Telemetry)"]
-        DDBStreams["Amazon DynamoDB Streams\n(NEW_IMAGE Change Capture)"]
-        LambdaML["AWS Lambda: Cloud ML Engine\n(Random Forest + XGBoost)"]
-    end
-
-    subgraph StorageLayer ["4. Persistence & Lifecycle Layer (Amazon DynamoDB)"]
-        TableEvents[("activity_events\n(Raw Ingestion + Status)")]
-        TableProfiles[("profiles\n(Clinical Survey Indicators)")]
-        TableRecs[("recommendations\n(24-Hour TTL Auto-Purge)")]
-    end
-
-    WatchSim -->|TLS/MQTT| IoTCore
-    IoTCore --> LambdaIngest
-    LambdaIngest --> TableEvents
-
-    TableEvents -->|Change Capture Trigger| DDBStreams
-    DDBStreams --> LambdaML
-
-    LambdaML -->|Read Baseline Profile| TableProfiles
-    LambdaML -->|Write Recommendation + TTL| TableRecs
-    LambdaML -->|Update Status = processed| TableEvents
-
-    SPA -->|Cognito User Auth| Cognito
-    SPA -->|Authorized HTTPS Calls| APIGW
-    APIGW --> TableProfiles
-    APIGW --> TableRecs
-```
-
-### 6.2 Edge Ingestion & Event Decoupling (Pattern B)
-High-frequency sensor streams (20 Hz) pose significant reliability risks if connected synchronously to machine learning execution pipelines. If inference experiences cold-start delays, incoming telemetry packets can be dropped. To solve this, the architecture implements **Pattern B (Decoupled DynamoDB Streams)**:
-1. Smartwatch sensor batches are published over TLS 1.3 to AWS IoT Core topic `health-adherence/telemetry`.
-2. A lightweight ingestion Lambda (`health-adherence-processor`) validates payload schemas and writes the raw record to DynamoDB `activity_events` with `status: "received"`.
-3. **Amazon DynamoDB Streams** captures this table change (`NEW_IMAGE`) and asynchronously invokes the specialized ML Lambda (`health-adherence-ml-engine`).
-4. This ensures that sensor ingestion is 100% decoupled from ML compute, preventing ingestion backpressure during traffic spikes.
-
-### 6.3 Just-In-Time Adaptive Intervention (JITAI) Engine
-The JITAI synthesis engine dynamically correlates acute physical states with chronic disease risks:
-- **Sedentary Interception:** When a user with a `High` or `Medium` metabolic risk band is classified in a `Sitting` or `Lying` state for $> 30$ continuous minutes, the engine issues a micro-break intervention: *"Prolonged sedentary duration detected. A 5-minute brisk walk will stimulate GLUT-4 translocation and reduce postprandial glucose surges."*
-- **Active Reinforcement:** When the user is classified in `Walking` or `Jogging`, the engine transitions to positive reinforcement: *"Excellent active pacing! You have achieved 45 minutes of moderate aerobic exertion toward your weekly 150-minute cardio goal."*
-
-### 6.4 Mathematical Formulation of Composite Behavioral Risk
+### 6.7 Just-In-Time Adaptive Intervention (JITAI) Engine & Composite Behavioral Risk
 To prevent disease risk scores from remaining static throughout the day, the system evaluates a dynamic **Composite Behavioral Risk Index** ($R_{\text{composite}}$):
 
 $$R_{\text{composite}}(t) = R_{\text{baseline}} \times \left(1 + \alpha \cdot \frac{T_{\text{sedentary}}(t)}{180} - \gamma \cdot \frac{T_{\text{active}}(t)}{60}\right)$$

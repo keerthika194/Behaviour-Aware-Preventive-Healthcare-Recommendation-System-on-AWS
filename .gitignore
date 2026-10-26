@@ -65,3 +65,5 @@ datasets/wisdm_smartwatch/raw/
 
 # Agent Metadata
 .agents/
+
+portable_demo.zip

@@ -202,8 +202,8 @@ def build_10s_windows(
     return windows
 
 
-def publish_to_aws(selected_windows, interval):
-    """Connects to AWS IoT Core and publishes telemetry."""
+def publish_to_aws(selected_windows, interval, continuous=False, max_windows=5):
+    """Connects to AWS IoT Core and publishes telemetry. Supports continuous loop."""
 
     if not AWS_SDK_AVAILABLE:
         raise RuntimeError(
@@ -288,46 +288,45 @@ def publish_to_aws(selected_windows, interval):
 
     print("  [OK] Connected to AWS IoT Core successfully.")
 
+    idx = 0
+    total_available = len(selected_windows)
     try:
-
-        for idx, payload in enumerate(
-            selected_windows,
-            1
-        ):
-            # Update timestamp dynamically right before sending
+        while True:
+            payload = dict(selected_windows[idx % total_available])
             import datetime
             payload["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             
             msg_body = json.dumps(payload)
-
             publish_future, _ = mqtt_connection.publish(
                 topic=topic,
                 payload=msg_body,
                 qos=mqtt.QoS.AT_LEAST_ONCE
             )
-
-            # Wait for AWS IoT to acknowledge the publish
             publish_future.result()
 
+            idx += 1
+            mode_tag = f"#{idx}" if continuous else f"#{idx}/{len(selected_windows)}"
             print(
                 f"  [SENT -> AWS IoT] "
-                f"Window #{idx}/{len(selected_windows)} "
+                f"Window {mode_tag} "
                 f"| Subject {payload['subject_id']} "
                 f"| Activity {payload['activity_code']} "
                 f"| Samples: {payload['samples_count']}"
             )
 
+            if not continuous and idx >= max_windows:
+                break
+
             time.sleep(interval)
-
+    except KeyboardInterrupt:
+        print("\n\n  [INFO] Manual stop requested by user (Ctrl+C)...")
     finally:
-
-        disconnect_future = mqtt_connection.disconnect()
-
-        disconnect_future.result()
-
-        print(
-            "  [OK] Disconnected cleanly from AWS IoT Core."
-        )
+        try:
+            disconnect_future = mqtt_connection.disconnect()
+            disconnect_future.result()
+            print("  [OK] Disconnected cleanly from AWS IoT Core.")
+        except Exception:
+            pass
 
 
 def run_simulator(
@@ -335,7 +334,8 @@ def run_simulator(
     max_windows=5,
     interval=0.1,
     subject_id=1600,
-    user_id=None
+    user_id=None,
+    continuous=False
 ):
 
     print("=" * 65)
@@ -438,14 +438,18 @@ def run_simulator(
     random.seed()
     random.shuffle(windows)
 
-    # Select requested number
-    selected_windows = windows[:max_windows]
-
-    print(
-        f"  Streaming first "
-        f"{len(selected_windows)} window(s) "
-        f"(max_windows={max_windows})...\n"
-    )
+    # Select requested windows or run continuous
+    if continuous or max_windows <= 0:
+        continuous = True
+        selected_windows = windows
+        print(f"  Streaming CONTINUOUS LOOP (interval={interval}s). Press [Ctrl+C] to stop...\n")
+    else:
+        selected_windows = windows[:max_windows]
+        print(
+            f"  Streaming first "
+            f"{len(selected_windows)} window(s) "
+            f"(max_windows={max_windows})...\n"
+        )
 
     # AWS mode
     if mode.lower() == "aws":
@@ -454,7 +458,9 @@ def run_simulator(
 
             publish_to_aws(
                 selected_windows,
-                interval
+                interval,
+                continuous=continuous,
+                max_windows=max_windows
             )
 
         except Exception as e:
@@ -572,8 +578,15 @@ def main():
         default=5,
         help=(
             "Maximum number of 10-second "
-            "windows to stream (default: 5)"
+            "windows to stream (0 = continuous loop, default: 5)"
         )
+    )
+
+    parser.add_argument(
+        "--loop",
+        "--continuous",
+        action="store_true",
+        help="Run continuously in an infinite loop until Ctrl+C"
     )
 
     parser.add_argument(
@@ -609,12 +622,14 @@ def main():
 
     args = parser.parse_args()
 
+    is_continuous = args.loop or args.max_windows <= 0
     run_simulator(
         mode=args.mode,
         max_windows=args.max_windows,
         interval=args.interval,
         subject_id=args.subject,
-        user_id=args.user
+        user_id=args.user,
+        continuous=is_continuous
     )
 
 

@@ -2,7 +2,8 @@
 Standalone Smartwatch Telemetry Simulator (Portable Demo)
 =========================================================
 Publishes realistic 20 Hz, 6-axis IMU (accelerometer + gyroscope) sensor windows
-to AWS IoT Core topic 'health-adherence/telemetry'. Requires NO external datasets!
+to AWS IoT Core topic 'health-adherence/telemetry'. Supports all 18 activities
+recognized by the Random Forest Activity Classifier.
 Runs continuously until stopped manually with Ctrl+C.
 """
 
@@ -32,12 +33,26 @@ CERT_PATH = str(CERTS_DIR / "26781763086e5e900056e5e56045bff216c4fd297b30eb6ed73
 KEY_PATH = str(CERTS_DIR / "26781763086e5e900056e5e56045bff216c4fd297b30eb6ed73241042e3a072a-private.pem.key")
 CA_PATH = str(CERTS_DIR / "AmazonRootCA1.pem")
 
+# Complete 18 WISDM Physical Activities Supported by Model
 ACTIVITY_NAMES = {
     "A": "Walking",
     "B": "Jogging",
     "C": "Stairs",
     "D": "Sitting",
-    "E": "Standing"
+    "E": "Standing",
+    "F": "Typing",
+    "G": "Brushing_Teeth",
+    "H": "Eating_Soup",
+    "I": "Eating_Chips",
+    "J": "Eating_Pasta",
+    "K": "Drinking_from_Cup",
+    "L": "Eating_Sandwich",
+    "M": "Kicking_Soccer_Ball",
+    "O": "Catch_Tennis_Ball",
+    "P": "Dribbling_Basketball",
+    "Q": "Writing",
+    "R": "Clapping",
+    "S": "Folding_Clothes"
 }
 
 def load_sample_windows():
@@ -47,19 +62,36 @@ def load_sample_windows():
     with open(json_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def run(user_id, count=None, interval=2.0):
-    windows = load_sample_windows()
+def run(user_id, count=None, interval=2.0, filter_activity=None):
+    all_windows = load_sample_windows()
+    
+    # Filter by specific activity if requested
+    if filter_activity:
+        tgt = filter_activity.strip().lower()
+        windows = [
+            w for w in all_windows
+            if w.get("activity_code", "").lower() == tgt
+            or w.get("activity_name", "").lower() == tgt
+            or ACTIVITY_NAMES.get(w.get("activity_code", ""), "").lower() == tgt
+        ]
+        if not windows:
+            print(f"[WARN] No windows found for activity '{filter_activity}'. Reverting to all 18 activities.")
+            windows = all_windows
+    else:
+        windows = all_windows
+
     is_continuous = (count is None or count <= 0)
     
-    print("=" * 65)
-    print("  STANDALONE IOT SMARTWATCH SIMULATOR (PORTABLE DEMO)")
-    print("=" * 65)
+    print("=" * 68)
+    print("  STANDALONE IOT SMARTWATCH SIMULATOR — ALL 18 ACTIVITIES")
+    print("=" * 68)
     print(f"Target User ID  : {user_id}")
     print(f"AWS IoT Endpoint: {AWS_ENDPOINT}")
     print(f"Topic           : {TOPIC}")
+    print(f"Activities      : {'All 18 Classes (Cycling)' if not filter_activity else filter_activity}")
     print(f"Mode            : {'CONTINUOUS LOOP (Press Ctrl+C to stop)' if is_continuous else f'{count} window(s)'}")
     print(f"Window Interval : {interval}s")
-    print("-" * 65)
+    print("-" * 68)
 
     print("[1/2] Connecting to AWS IoT Core over TLS 1.3 / MQTT...")
     connection = mqtt_connection_builder.mtls_from_path(
@@ -90,7 +122,8 @@ def run(user_id, count=None, interval=2.0):
             payload["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             
             act_code = payload.get("activity_code", "A")
-            act_name = ACTIVITY_NAMES.get(act_code, act_code)
+            act_name = payload.get("activity_name") or ACTIVITY_NAMES.get(act_code, act_code)
+            payload["activity_name"] = act_name
             
             json_payload = json.dumps(payload)
             publish_future, _ = connection.publish(
@@ -102,7 +135,7 @@ def run(user_id, count=None, interval=2.0):
             
             sent_count += 1
             mode_str = f"#{sent_count}" if is_continuous else f"#{sent_count}/{count}"
-            print(f"  [SENT -> AWS IoT] Window {mode_str} | Activity: {act_name} ({act_code}) | 200 samples (20 Hz)")
+            print(f"  [SENT -> AWS IoT] Window {mode_str} | Activity: {act_name:21s} ({act_code}) | 200 samples (20 Hz)")
             
             if not is_continuous and sent_count >= count:
                 break
@@ -120,18 +153,28 @@ def run(user_id, count=None, interval=2.0):
             print("  [OK] Disconnected cleanly.")
         except Exception:
             pass
-        print("-" * 65)
+        print("-" * 68)
         print(f"[SUMMARY] Total windows streamed: {sent_count}")
-        print("=" * 65)
+        print("=" * 68)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Standalone IoT Smartwatch Simulator")
+    parser = argparse.ArgumentParser(description="Standalone IoT Smartwatch Simulator (All 18 Activities)")
     parser.add_argument("--user", type=str, default="41d3cd0a-8091-70da-3fbf-1feb7e48aed9", help="Cognito User ID")
     parser.add_argument("--count", type=int, default=0, help="Number of windows to send (0 or omitted = continuous loop)")
     parser.add_argument("--interval", type=float, default=2.0, help="Interval in seconds between windows (default: 2.0s)")
+    parser.add_argument("--activity", type=str, default=None, help="Filter by specific activity (e.g. Walking, Jogging, Typing)")
     parser.add_argument("--continuous", "--loop", action="store_true", help="Run indefinitely in a loop until Ctrl+C")
+    parser.add_argument("--list", action="store_true", help="List all 18 supported activities and exit")
     args = parser.parse_args()
     
-    # If count is 0 or negative, or --continuous is passed, run indefinitely
+    if args.list:
+        print("=" * 60)
+        print("  ALL 18 PHYSICAL ACTIVITIES SUPPORTED BY SYSTEM")
+        print("=" * 60)
+        for code, name in sorted(ACTIVITY_NAMES.items()):
+            print(f"  Code {code:2s} : {name}")
+        print("=" * 60)
+        sys.exit(0)
+
     target_count = None if (args.continuous or args.count <= 0) else args.count
-    run(user_id=args.user, count=target_count, interval=args.interval)
+    run(user_id=args.user, count=target_count, interval=args.interval, filter_activity=args.activity)
